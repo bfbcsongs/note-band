@@ -28,19 +28,21 @@
         }
 
         header {
-            padding: 12px 20px;
+            padding: 10px 15px;
             background: var(--panel-bg);
             border-bottom: 1px solid var(--border-color);
             display: flex;
             justify-content: space-between;
             align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
         }
 
-        h1 { font-size: 1.1rem; font-weight: 600; letter-spacing: 0.5px; }
+        h1 { font-size: 1rem; font-weight: 600; }
 
         .toolbar {
             display: flex;
-            gap: 8px;
+            gap: 6px;
             align-items: center;
         }
 
@@ -48,17 +50,17 @@
             background: #262626;
             color: #fff;
             border: 1px solid #404040;
-            padding: 6px 12px;
+            padding: 5px 10px;
             border-radius: 4px;
-            font-size: 0.85rem;
+            font-size: 0.8rem;
             cursor: pointer;
             font-weight: 500;
-            transition: background 0.2s;
         }
 
         .btn:hover { background: #404040; }
         .btn-primary { background: var(--accent-color); border: none; }
         .btn-primary:hover { background: var(--accent-hover); }
+        .btn-active { background: var(--accent-color) !important; border-color: var(--accent-color); }
 
         .trans-badge {
             display: flex;
@@ -70,8 +72,8 @@
         }
 
         .trans-badge span {
-            padding: 6px 10px;
-            font-size: 0.85rem;
+            padding: 4px 8px;
+            font-size: 0.8rem;
             font-family: monospace;
             border-right: 1px solid var(--border-color);
         }
@@ -80,43 +82,31 @@
             background: #262626;
             color: white;
             border: none;
-            padding: 6px 10px;
+            padding: 4px 8px;
             cursor: pointer;
             font-weight: bold;
+            font-size: 0.9rem;
         }
         .trans-badge button:hover { background: #404040; }
 
-        .main-container {
+        .workspace {
             flex: 1;
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            height: calc(100vh - 53px);
-        }
-
-        @media (max-width: 768px) {
-            .main-container { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; }
-        }
-
-        .pane {
+            position: relative;
+            overflow: hidden;
             display: flex;
             flex-direction: column;
-            border-right: 1px solid var(--border-color);
+        }
+
+        .screen {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            display: none;
+            flex-direction: column;
             background: var(--bg-color);
         }
 
-        .pane:last-child { border-right: none; }
-
-        .pane-header {
-            padding: 8px 16px;
-            background: var(--panel-bg);
-            font-size: 0.75rem;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            color: #888;
-            border-bottom: 1px solid var(--border-color);
+        .screen.active {
             display: flex;
-            justify-content: space-between;
-            align-items: center;
         }
 
         textarea {
@@ -127,24 +117,23 @@
             border: none;
             padding: 16px;
             font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-            font-size: 0.95rem;
-            line-height: 1.5;
+            font-size: 1rem;
+            line-height: 1.6;
             resize: none;
             outline: none;
         }
 
         .output-box {
             flex: 1;
-            padding: 16px;
+            padding: 20px;
             overflow-y: auto;
             font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-            font-size: 1rem;
-            line-height: 1.6;
+            font-size: 1.1rem;
+            line-height: 1.7;
             white-space: pre-wrap;
             word-break: break-all;
         }
 
-        /* Kulay berde para sa mga chords */
         .chord {
             color: var(--chord-color);
             font-weight: bold;
@@ -154,28 +143,27 @@
 <body>
 
     <header>
-        <h1>Chords Transposer</h1>
+        <h1>Transposer</h1>
         <div class="toolbar">
             <div class="trans-badge">
-                <span>Key: <strong id="key-val">0</strong></span>
+                <span>Key:<strong id="key-val">0</strong></span>
                 <button onclick="transpose(-1)">-</button>
                 <button onclick="transpose(1)">+</button>
             </div>
-            <button class="btn btn-primary" onclick="copyResult()">Copy Result</button>
+            <button id="btn-play" class="btn btn-primary" onclick="switchMode('play')">Play</button>
+            <button id="btn-edit" class="btn" onclick="switchMode('edit')">Edit</button>
         </div>
     </header>
 
-    <div class="main-container">
-        <!-- Input Pane -->
-        <div class="pane">
-            <div class="pane-header">Input (Paste Lyrics & Chords Here)</div>
-            <textarea id="raw-input" placeholder="C        G&#10;Kumusta ka aking mahal...&#10;Am       F&#10;Bagong araw na naman..."></textarea>
+    <div class="workspace">
+        <!-- Edit Mode Screen -->
+        <div id="screen-edit" class="screen">
+            <textarea id="raw-input" placeholder="I-paste ang lyrics at chords dito..."></textarea>
         </div>
 
-        <!-- Output Pane -->
-        <div class="pane">
-            <div class="pane-header">Live Transposed Output</div>
-            <div id="output" class="output-box"></div>
+        <!-- Play Mode Screen -->
+        <div id="screen-play" class="screen active">
+            <div id="output" class="output-box">Wala pang nilalagay na chords. I-click ang 'Edit' para maglagay.</div>
         </div>
     </div>
 
@@ -206,19 +194,19 @@
 
         function processText() {
             const text = document.getElementById('raw-input').value;
+            if (!text.trim()) {
+                document.getElementById('output').innerText = "Wala pang nilalagay na chords. I-click ang 'Edit' para maglagay.";
+                return;
+            }
+
             const lines = text.split('\n');
             let htmlOutput = '';
-
-            // Regex para saluhin ang mga chords habang iniingatan ang formatting
             const chordRegex = /\b([A-G][#b]?(?:m|maj|min|dim|aug|sus|7|9|11|13)?(?:\/[A-G][#b]?)?)\b/g;
 
             for (let i = 0; i < lines.length; i++) {
                 let line = lines[i];
-                
-                // I-escape muna ang HTML para ligtas
                 let escapedLine = line.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
                 
-                // Palitan ang mga chords ng span na may berde kulay
                 let formattedLine = escapedLine.replace(chordRegex, (match) => {
                     let transposed = match.includes('/') 
                         ? match.split('/').map(c => transposeNote(c)).join('/')
@@ -238,11 +226,24 @@
             processText();
         }
 
-        function copyResult() {
-            const outputText = document.getElementById('output').innerText;
-            navigator.clipboard.writeText(outputText).then(() => {
-                alert('Nakopya na sa clipboard!');
-            });
+        function switchMode(mode) {
+            const editScreen = document.getElementById('screen-edit');
+            const playScreen = document.getElementById('screen-play');
+            const btnEdit = document.getElementById('btn-edit');
+            const btnPlay = document.getElementById('btn-play');
+
+            if (mode === 'edit') {
+                editScreen.classList.add('active');
+                playScreen.classList.remove('active');
+                btnEdit.classList.add('btn-primary');
+                btnPlay.classList.remove('btn-primary');
+            } else {
+                processText();
+                editScreen.classList.remove('active');
+                playScreen.classList.add('active');
+                btnPlay.classList.add('btn-primary');
+                btnEdit.classList.remove('btn-primary');
+            }
         }
 
         document.getElementById('raw-input').addEventListener('input', processText);
