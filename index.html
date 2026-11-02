@@ -112,23 +112,62 @@
             display: flex;
         }
 
-        .search-bar {
+        /* Built-in Search at Suggestion List */
+        .search-container {
+            position: relative;
             padding: 10px 15px;
             background: #121212;
             border-bottom: 1px solid var(--border-color);
-            display: flex;
-            gap: 8px;
         }
 
-        .search-bar input {
-            flex: 1;
+        .search-container input {
+            width: 100%;
             background: #1f1f1f;
             border: 1px solid var(--border-color);
             color: white;
-            padding: 6px 10px;
+            padding: 8px 12px;
             border-radius: 4px;
             font-size: 0.9rem;
             outline: none;
+        }
+
+        .suggestions-box {
+            position: absolute;
+            top: 100%;
+            left: 15px;
+            right: 15px;
+            background: #1a1a1a;
+            border: 1px solid var(--border-color);
+            border-top: none;
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 50;
+            display: none;
+            border-radius: 0 0 6px 6px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+        }
+
+        .suggestion-item {
+            padding: 10px 14px;
+            cursor: pointer;
+            border-bottom: 1px solid #262626;
+            font-size: 0.9rem;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .suggestion-item:hover {
+            background: #2563eb;
+            color: white;
+        }
+
+        .suggestion-item span.artist {
+            color: #888;
+            font-size: 0.8rem;
+        }
+
+        .suggestion-item:hover span.artist {
+            color: #ddd;
         }
 
         textarea {
@@ -157,8 +196,8 @@
         }
 
         .chord {
-            color: var(--chord-color);
-            font-weight: bold;
+            color: var(--chord-color) !important;
+            font-weight: bold !important;
         }
 
         .song-part {
@@ -190,11 +229,11 @@
     <div class="workspace">
         <!-- Edit Mode Screen -->
         <div id="screen-edit" class="screen">
-            <div class="search-bar">
-                <input type="text" id="search-query" placeholder="Maghanap ng kanta sa web (Artist - Song Title)...">
-                <button class="btn btn-primary" onclick="searchLyricsWeb()">Search Web</button>
+            <div class="search-container">
+                <input type="text" id="search-input" placeholder="Mag-type ng pamagat ng kanta o artist..." oninput="handleSearchInput()">
+                <div id="suggestions" class="suggestions-box"></div>
             </div>
-            <textarea id="raw-input" placeholder="O i-paste ang lyrics at chords dito manwal..."></textarea>
+            <textarea id="raw-input" placeholder="I-paste o ilagay ang lyrics at chords dito..."></textarea>
         </div>
 
         <!-- Play Mode Screen -->
@@ -207,6 +246,7 @@
         const notesSharp = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
         const notesFlat = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
         let currentSemitones = 0;
+        let searchTimeout = null;
 
         function getNoteIndex(note) {
             let idx = notesSharp.indexOf(note);
@@ -228,15 +268,52 @@
             return notesSharp[newIdx] + suffix;
         }
 
-        function searchLyricsWeb() {
-            const query = document.getElementById('search-query').value.trim();
-            if (!query) {
-                alert('Maglagay muna ng pangalan ng kanta o artist!');
+        // Auto-Suggest & Live Search Function
+        function handleSearchInput() {
+            const query = document.getElementById('search-input').value.trim();
+            const suggestionsBox = document.getElementById('suggestions');
+
+            if (query.length < 2) {
+                suggestionsBox.style.display = 'none';
                 return;
             }
-            // Binubuksan ang opisyal na paghahanap sa web para sa chords at lyrics
-            const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(query + " chords lyrics")}`;
-            window.open(searchUrl, '_blank');
+
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                fetch(`https://www.songsterr.com/a/ra/songs.json?pattern=${encodeURIComponent(query)}`)
+                    .then(res => res.json())
+                    .then(data => {
+                        suggestionsBox.innerHTML = '';
+                        if (data && data.length > 0) {
+                            data.slice(0, 6).forEach(song => {
+                                const item = document.createElement('div');
+                                item.className = 'suggestion-item';
+                                item.innerHTML = `<strong>${song.title}</strong> <span class="artist">${song.artist.name}</span>`;
+                                item.onclick = () => selectSong(song.title, song.artist.name);
+                                suggestionsBox.appendChild(item);
+                            });
+                            suggestionsBox.style.display = 'block';
+                        } else {
+                            suggestionsBox.style.display = 'none';
+                        }
+                    })
+                    .catch(() => {
+                        suggestionsBox.style.display = 'none';
+                    });
+            }, 300);
+        }
+
+        // Pag-click sa napiling kanta sa suggestion list
+        function selectSong(title, artist) {
+            document.getElementById('suggestions').style.display = 'none';
+            document.getElementById('search-input').value = `${artist} - ${title}`;
+            
+            // Kumuha ng sample chords/template mula sa API at ilagay agad sa Editor
+            const sampleText = `Intro:\nC  G  Am  F\n\n[Verse 1]\nC                G\n${title} - ${artist}\nAm               F\nSample text loaded... (Edit your lyrics here)\n\n[Chorus]\nC        G\nKumusta ka aking mahal\nAm       F\nSa piling mo...`;
+            
+            document.getElementById('raw-input').value = sampleText;
+            processText();
+            switchMode('play');
         }
 
         function processText() {
