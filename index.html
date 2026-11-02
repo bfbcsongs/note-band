@@ -27,7 +27,11 @@
             overflow: hidden;
         }
 
+        /* Sticky Header para laging kita ang mga tools habang nag-a-scroll */
         header {
+            position: sticky;
+            top: 0;
+            z-index: 100;
             padding: 10px 15px;
             background: var(--panel-bg);
             border-bottom: 1px solid var(--border-color);
@@ -60,7 +64,6 @@
         .btn:hover { background: #404040; }
         .btn-primary { background: var(--accent-color); border: none; }
         .btn-primary:hover { background: var(--accent-hover); }
-        .btn-active { background: var(--accent-color) !important; border-color: var(--accent-color); }
 
         .trans-badge {
             display: flex;
@@ -134,9 +137,10 @@
             word-break: break-all;
         }
 
+        /* Siguraduhing laging matingkad na berde ang mga chords */
         .chord {
-            color: var(--chord-color);
-            font-weight: bold;
+            color: #22c55e !important;
+            font-weight: bold !important;
         }
     </style>
 </head>
