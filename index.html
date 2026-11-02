@@ -3,33 +3,180 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Band-Mate Chords Transposer</title>
+    <title>Chords Transposer Pro</title>
     <style>
-        body { font-family: sans-serif; background: #121212; color: #fff; margin: 0; padding: 20px; }
-        .container { max-width: 800px; margin: auto; background: #1e1e1e; padding: 20px; border-radius: 8px; }
-        textarea, pre { width: 100%; background: #2d2d2d; color: #fff; padding: 10px; border-radius: 4px; border: none; font-family: monospace; font-size: 16px; box-sizing: border-box; }
-        textarea { height: 200px; resize: vertical; }
-        pre { white-space: pre-wrap; min-height: 150px; }
-        .controls { display: flex; gap: 10px; margin: 15px 0; align-items: center; flex-wrap: wrap; }
-        button { background: #6200ee; color: #fff; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 16px; }
-        button:hover { background: #3700b3; }
-        span { font-weight: bold; font-size: 18px; }
+        :root {
+            --bg-color: #0a0a0a;
+            --panel-bg: #141414;
+            --border-color: #262626;
+            --text-primary: #ededed;
+            --chord-color: #22c55e;
+            --accent-color: #3b82f6;
+            --accent-hover: #2563eb;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: var(--bg-color);
+            color: var(--text-primary);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        header {
+            padding: 12px 20px;
+            background: var(--panel-bg);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        h1 { font-size: 1.1rem; font-weight: 600; letter-spacing: 0.5px; }
+
+        .toolbar {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .btn {
+            background: #262626;
+            color: #fff;
+            border: 1px solid #404040;
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            font-weight: 500;
+            transition: background 0.2s;
+        }
+
+        .btn:hover { background: #404040; }
+        .btn-primary { background: var(--accent-color); border: none; }
+        .btn-primary:hover { background: var(--accent-hover); }
+
+        .trans-badge {
+            display: flex;
+            align-items: center;
+            background: #1f1f1f;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .trans-badge span {
+            padding: 6px 10px;
+            font-size: 0.85rem;
+            font-family: monospace;
+            border-right: 1px solid var(--border-color);
+        }
+
+        .trans-badge button {
+            background: #262626;
+            color: white;
+            border: none;
+            padding: 6px 10px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .trans-badge button:hover { background: #404040; }
+
+        .main-container {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            height: calc(100vh - 53px);
+        }
+
+        @media (max-width: 768px) {
+            .main-container { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; }
+        }
+
+        .pane {
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid var(--border-color);
+            background: var(--bg-color);
+        }
+
+        .pane:last-child { border-right: none; }
+
+        .pane-header {
+            padding: 8px 16px;
+            background: var(--panel-bg);
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #888;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        textarea {
+            flex: 1;
+            width: 100%;
+            background: transparent;
+            color: var(--text-primary);
+            border: none;
+            padding: 16px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 0.95rem;
+            line-height: 1.5;
+            resize: none;
+            outline: none;
+        }
+
+        .output-box {
+            flex: 1;
+            padding: 16px;
+            overflow-y: auto;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 1rem;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        /* Kulay berde para sa mga chords */
+        .chord {
+            color: var(--chord-color);
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h2>Chords Transposer & Share</h2>
-        <label for="raw-input">Ilagay ang lyrics at chords dito:</label>
-        <textarea id="raw-input" placeholder="C        G&#10;Kumusta ka aking mahal..."></textarea>
-        
-        <div class="controls">
-            <button onclick="transpose(-1)">- Bawas (Semitone)</button>
-            <button onclick="transpose(1)">+ Dagdag (Semitone)</button>
-            <span>Transpose Steps: <span id="semitone-count">0</span></span>
+
+    <header>
+        <h1>Chords Transposer</h1>
+        <div class="toolbar">
+            <div class="trans-badge">
+                <span>Key: <strong id="key-val">0</strong></span>
+                <button onclick="transpose(-1)">-</button>
+                <button onclick="transpose(1)">+</button>
+            </div>
+            <button class="btn btn-primary" onclick="copyResult()">Copy Result</button>
+        </div>
+    </header>
+
+    <div class="main-container">
+        <!-- Input Pane -->
+        <div class="pane">
+            <div class="pane-header">Input (Paste Lyrics & Chords Here)</div>
+            <textarea id="raw-input" placeholder="C        G&#10;Kumusta ka aking mahal...&#10;Am       F&#10;Bagong araw na naman..."></textarea>
         </div>
 
-        <h3>Resulta:</h3>
-        <pre id="output"></pre>
+        <!-- Output Pane -->
+        <div class="pane">
+            <div class="pane-header">Live Transposed Output</div>
+            <div id="output" class="output-box"></div>
+        </div>
     </div>
 
     <script>
@@ -43,8 +190,7 @@
             return idx;
         }
 
-        function transposeNote(match, chord) {
-            let len = chord.length;
+        function transposeNote(chord) {
             let root = chord[0];
             if (chord.length > 1 && (chord[1] === '#' || chord[1] === 'b')) {
                 root = chord.substring(0, 2);
@@ -58,23 +204,48 @@
             return notesSharp[newIdx] + suffix;
         }
 
-        function transpose(amount) {
-            currentSemitones += amount;
-            document.getElementById('semitone-count').innerText = currentSemitones;
-            let text = document.getElementById('raw-input').value;
-            
-            // Regex para saluhin ang mga chords sa loob ng text
-            let transposed = text.replace(/\b([A-G][#b]?(?:m|maj|min|dim|aug|sus|7|9|11|13)?(?:\/[A-G][#b]?)?)\b/g, (match) => {
-                if(match.includes('/')) {
-                    return match.split('/').map(c => transposeNote(c, c)).join('/');
-                }
-                return transposeNote(match, match);
-            });
+        function processText() {
+            const text = document.getElementById('raw-input').value;
+            const lines = text.split('\n');
+            let htmlOutput = '';
 
-            document.getElementById('output').innerText = transposed;
+            // Regex para saluhin ang mga chords habang iniingatan ang formatting
+            const chordRegex = /\b([A-G][#b]?(?:m|maj|min|dim|aug|sus|7|9|11|13)?(?:\/[A-G][#b]?)?)\b/g;
+
+            for (let i = 0; i < lines.length; i++) {
+                let line = lines[i];
+                
+                // I-escape muna ang HTML para ligtas
+                let escapedLine = line.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                
+                // Palitan ang mga chords ng span na may berde kulay
+                let formattedLine = escapedLine.replace(chordRegex, (match) => {
+                    let transposed = match.includes('/') 
+                        ? match.split('/').map(c => transposeNote(c)).join('/')
+                        : transposeNote(match);
+                    return `<span class="chord">${transposed}</span>`;
+                });
+
+                htmlOutput += formattedLine + (i < lines.length - 1 ? '\n' : '');
+            }
+
+            document.getElementById('output').innerHTML = htmlOutput;
+            document.getElementById('key-val').innerText = currentSemitones > 0 ? `+${currentSemitones}` : currentSemitones;
         }
 
-        document.getElementById('raw-input').addEventListener('input', () => transpose(0));
+        function transpose(amount) {
+            currentSemitones += amount;
+            processText();
+        }
+
+        function copyResult() {
+            const outputText = document.getElementById('output').innerText;
+            navigator.clipboard.writeText(outputText).then(() => {
+                alert('Nakopya na sa clipboard!');
+            });
+        }
+
+        document.getElementById('raw-input').addEventListener('input', processText);
     </script>
 </body>
 </html>
