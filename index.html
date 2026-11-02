@@ -11,6 +11,7 @@
             --border-color: #262626;
             --text-primary: #ededed;
             --chord-color: #22c55e;
+            --section-color: #38bdf8;
             --accent-color: #3b82f6;
             --accent-hover: #2563eb;
         }
@@ -27,7 +28,6 @@
             overflow: hidden;
         }
 
-        /* Sticky Header para laging kita ang mga tools habang nag-a-scroll */
         header {
             position: sticky;
             top: 0;
@@ -112,6 +112,25 @@
             display: flex;
         }
 
+        .search-bar {
+            padding: 10px 15px;
+            background: #121212;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            gap: 8px;
+        }
+
+        .search-bar input {
+            flex: 1;
+            background: #1f1f1f;
+            border: 1px solid var(--border-color);
+            color: white;
+            padding: 6px 10px;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            outline: none;
+        }
+
         textarea {
             flex: 1;
             width: 100%;
@@ -137,17 +156,26 @@
             word-break: break-all;
         }
 
-        /* Siguraduhing laging matingkad na berde ang mga chords */
         .chord {
-            color: #22c55e !important;
-            font-weight: bold !important;
+            color: var(--chord-color);
+            font-weight: bold;
+        }
+
+        .song-part {
+            color: var(--section-color);
+            font-weight: bold;
+            margin-top: 10px;
+            display: inline-block;
+            text-transform: uppercase;
+            font-size: 0.95rem;
+            letter-spacing: 1px;
         }
     </style>
 </head>
 <body>
 
     <header>
-        <h1>Transposer</h1>
+        <h1>Transposer Pro</h1>
         <div class="toolbar">
             <div class="trans-badge">
                 <span>Key:<strong id="key-val">0</strong></span>
@@ -162,12 +190,16 @@
     <div class="workspace">
         <!-- Edit Mode Screen -->
         <div id="screen-edit" class="screen">
-            <textarea id="raw-input" placeholder="I-paste ang lyrics at chords dito..."></textarea>
+            <div class="search-bar">
+                <input type="text" id="search-query" placeholder="Maghanap ng kanta sa web (Artist - Song Title)...">
+                <button class="btn btn-primary" onclick="searchLyricsWeb()">Search Web</button>
+            </div>
+            <textarea id="raw-input" placeholder="O i-paste ang lyrics at chords dito manwal..."></textarea>
         </div>
 
         <!-- Play Mode Screen -->
         <div id="screen-play" class="screen active">
-            <div id="output" class="output-box">Wala pang nilalagay na chords. I-click ang 'Edit' para maglagay.</div>
+            <div id="output" class="output-box">Wala pang nilalagay na chords. I-click ang 'Edit' para maghanap o maglagay.</div>
         </div>
     </div>
 
@@ -196,29 +228,44 @@
             return notesSharp[newIdx] + suffix;
         }
 
+        function searchLyricsWeb() {
+            const query = document.getElementById('search-query').value.trim();
+            if (!query) {
+                alert('Maglagay muna ng pangalan ng kanta o artist!');
+                return;
+            }
+            // Binubuksan ang opisyal na paghahanap sa web para sa chords at lyrics
+            const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(query + " chords lyrics")}`;
+            window.open(searchUrl, '_blank');
+        }
+
         function processText() {
             const text = document.getElementById('raw-input').value;
             if (!text.trim()) {
-                document.getElementById('output').innerText = "Wala pang nilalagay na chords. I-click ang 'Edit' para maglagay.";
+                document.getElementById('output').innerText = "Wala pang nilalagay na chords. I-click ang 'Edit' para maglagay o maghanap.";
                 return;
             }
 
             const lines = text.split('\n');
             let htmlOutput = '';
             const chordRegex = /\b([A-G][#b]?(?:m|maj|min|dim|aug|sus|7|9|11|13)?(?:\/[A-G][#b]?)?)\b/g;
+            const partRegex = /^(?:\[.*\]|Intro|Verse\s*\d*|Chorus|Pre-Chorus|Bridge|Outro|Instrumental|Interlude)\s*[:]?$/i;
 
             for (let i = 0; i < lines.length; i++) {
                 let line = lines[i];
                 let escapedLine = line.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
                 
-                let formattedLine = escapedLine.replace(chordRegex, (match) => {
-                    let transposed = match.includes('/') 
-                        ? match.split('/').map(c => transposeNote(c)).join('/')
-                        : transposeNote(match);
-                    return `<span class="chord">${transposed}</span>`;
-                });
-
-                htmlOutput += formattedLine + (i < lines.length - 1 ? '\n' : '');
+                if (partRegex.test(line.trim())) {
+                    htmlOutput += `<span class="song-part">${escapedLine}</span>\n`;
+                } else {
+                    let formattedLine = escapedLine.replace(chordRegex, (match) => {
+                        let transposed = match.includes('/') 
+                            ? match.split('/').map(c => transposeNote(c)).join('/')
+                            : transposeNote(match);
+                        return `<span class="chord">${transposed}</span>`;
+                    });
+                    htmlOutput += formattedLine + (i < lines.length - 1 ? '\n' : '');
+                }
             }
 
             document.getElementById('output').innerHTML = htmlOutput;
