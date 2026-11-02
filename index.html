@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Band-Mate Chords Transposer</title>
+    <style>
+        body { font-family: sans-serif; background: #121212; color: #fff; margin: 0; padding: 20px; }
+        .container { max-width: 800px; margin: auto; background: #1e1e1e; padding: 20px; border-radius: 8px; }
+        textarea, pre { width: 100%; background: #2d2d2d; color: #fff; padding: 10px; border-radius: 4px; border: none; font-family: monospace; font-size: 16px; box-sizing: border-box; }
+        textarea { height: 200px; resize: vertical; }
+        pre { white-space: pre-wrap; min-height: 150px; }
+        .controls { display: flex; gap: 10px; margin: 15px 0; align-items: center; flex-wrap: wrap; }
+        button { background: #6200ee; color: #fff; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 16px; }
+        button:hover { background: #3700b3; }
+        span { font-weight: bold; font-size: 18px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Chords Transposer & Share</h2>
+        <label for="raw-input">Ilagay ang lyrics at chords dito:</label>
+        <textarea id="raw-input" placeholder="C        G&#10;Kumusta ka aking mahal..."></textarea>
+        
+        <div class="controls">
+            <button onclick="transpose(-1)">- Bawas (Semitone)</button>
+            <button onclick="transpose(1)">+ Dagdag (Semitone)</button>
+            <span>Transpose Steps: <span id="semitone-count">0</span></span>
+        </div>
+
+        <h3>Resulta:</h3>
+        <pre id="output"></pre>
+    </div>
+
+    <script>
+        const notesSharp = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+        const notesFlat = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
+        let currentSemitones = 0;
+
+        function getNoteIndex(note) {
+            let idx = notesSharp.indexOf(note);
+            if (idx === -1) idx = notesFlat.indexOf(note);
+            return idx;
+        }
+
+        function transposeNote(match, chord) {
+            let len = chord.length;
+            let root = chord[0];
+            if (chord.length > 1 && (chord[1] === '#' || chord[1] === 'b')) {
+                root = chord.substring(0, 2);
+            }
+            let suffix = chord.substring(root.length);
+            let idx = getNoteIndex(root);
+            if (idx === -1) return chord;
+            
+            let newIdx = (idx + currentSemitones) % 12;
+            if (newIdx < 0) newIdx += 12;
+            return notesSharp[newIdx] + suffix;
+        }
+
+        function transpose(amount) {
+            currentSemitones += amount;
+            document.getElementById('semitone-count').innerText = currentSemitones;
+            let text = document.getElementById('raw-input').value;
+            
+            // Regex para saluhin ang mga chords sa loob ng text
+            let transposed = text.replace(/\b([A-G][#b]?(?:m|maj|min|dim|aug|sus|7|9|11|13)?(?:\/[A-G][#b]?)?)\b/g, (match) => {
+                if(match.includes('/')) {
+                    return match.split('/').map(c => transposeNote(c, c)).join('/');
+                }
+                return transposeNote(match, match);
+            });
+
+            document.getElementById('output').innerText = transposed;
+        }
+
+        document.getElementById('raw-input').addEventListener('input', () => transpose(0));
+    </script>
+</body>
+</html>
