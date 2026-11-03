@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Band Note - Modular Chords Pro</title>
+    <title>Band Note - Universal Standalone Pro</title>
     <!-- Lightweight Offline QR Code Library -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     
@@ -48,7 +48,7 @@
             --danger-color: #ef4444;
             --lineup-color: #8b5cf6;
             --sync-on: #10b981;
-            --highlight-color: #facc15; /* Yellow/Amber tint para sa active part */
+            --highlight-color: #facc15; /* Yellow/Amber highlight tint */
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -218,10 +218,11 @@
             tab-size: 4;
         }
 
+        /* Standalone Scroll Viewport para pantay ang hitsura sa iba't ibang phone */
         .output-box {
             flex: 1;
             padding: 16px;
-            padding-bottom: 70px;
+            padding-bottom: 80px;
             overflow-y: auto;
             font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace;
             font-size: 0.95rem;
@@ -229,6 +230,7 @@
             white-space: pre;
             tab-size: 4;
             -webkit-overflow-scrolling: touch;
+            scroll-behavior: smooth;
         }
 
         .floating-quick-bar {
@@ -236,7 +238,7 @@
             bottom: 12px;
             left: 50%;
             transform: translateX(-50%);
-            background: rgba(20, 20, 20, 0.9);
+            background: rgba(20, 20, 20, 0.95);
             border: 1px solid var(--border-color);
             padding: 6px 10px;
             border-radius: 20px;
@@ -267,11 +269,11 @@
         }
         .song-part:hover { color: #fff; }
 
-        /* Yellow-tinted highlight para sa active song part */
+        /* Yellow-tinted active highlight */
         .song-part.active-part {
-            background-color: rgba(250, 204, 21, 0.2);
+            background-color: rgba(250, 204, 21, 0.25);
             color: var(--highlight-color) !important;
-            border-left: 3px solid var(--highlight-color);
+            border-left: 4px solid var(--highlight-color);
             padding-left: 8px;
         }
 
@@ -383,7 +385,8 @@
         </div>
 
         <div id="screen-play" class="screen active">
-            <div id="output" class="output-box" onscroll="handleScrollSync()">Wala pang nilalagay na chords. I-click ang 'Songs' o 'Line Up' para pumili.</div>
+            <!-- Standalone output viewport para iwas gulo sa magkaibang screen size -->
+            <div id="output" class="output-box">Wala pang nilalagay na chords. I-click ang 'Songs' o 'Line Up' para pumili.</div>
             <div id="floating-quick-bar" class="floating-quick-bar">
                 <span style="font-size: 0.7rem; color: #aaa; align-self: center;">Jump:</span>
             </div>
@@ -490,7 +493,7 @@
 
         const lineupCategories = ["Opening", "Joyful", "Solemn", "Offering", "Closing", "Others"];
 
-        // --- FIREBASE REAL-TIME SYNC LISTENER ---
+        // --- UNIVERSAL FIREBASE SYNC LISTENER (Focus on Part Name & Commands) ---
         window.addEventListener('DOMContentLoaded', () => {
             const liveRef = window.fbRef(window.fbDB, 'live_session');
             window.fbOnValue(liveRef, (snapshot) => {
@@ -510,11 +513,9 @@
                         processText();
                     }
 
-                    const outputBox = document.getElementById('output');
-                    if (data.targetPartId) {
-                        highlightAndCenterPart(data.targetPartId);
-                    } else if (data.scrollTop !== undefined && Math.abs(outputBox.scrollTop - data.scrollTop) > 5) {
-                        outputBox.scrollTop = data.scrollTop;
+                    // Gamitin ang unibersal na activePart name para i-sync ang posisyon at highlight sa lahat ng uri ng phone
+                    if (data.activePartId) {
+                        applyUniversalHighlightAndCenter(data.activePartId);
                     }
 
                     setTimeout(() => { isReceivingRemoteUpdate = false; }, 100);
@@ -524,22 +525,14 @@
 
         function broadcastLiveState(extraData = {}) {
             if (!isLiveSyncEnabled || isReceivingRemoteUpdate) return;
-            const outputBox = document.getElementById('output');
             const state = {
                 title: currentSongTitle,
                 content: document.getElementById('raw-input').value,
                 semitones: currentSemitones,
-                scrollTop: outputBox.scrollTop,
                 updatedAt: Date.now(),
                 ...extraData
             };
             window.fbSet(window.fbRef(window.fbDB, 'live_session'), state);
-        }
-
-        function handleScrollSync() {
-            if (!isReceivingRemoteUpdate) {
-                broadcastLiveState();
-            }
         }
 
         function toggleLiveSync() {
@@ -615,15 +608,15 @@
                 let matchPart = trimmed.match(partRegex);
                 if (matchPart) {
                     let partLabel = matchPart[1] || matchPart[0];
-                    let targetId = `part-item-${partCounter}`;
+                    let targetId = `part-${partCounter}`;
                     
-                    htmlOutput += `<span id="${targetId}" class="song-part" onclick="jumpToSongPart('${targetId}')">${escapedLine}</span>\n`;
+                    htmlOutput += `<span id="${targetId}" class="song-part" onclick="triggerSongPart('${targetId}')">${escapedLine}</span>\n`;
 
                     let qBtn = document.createElement('button');
                     qBtn.className = 'btn btn-part';
                     qBtn.style.padding = '3px 8px';
                     qBtn.innerText = partLabel;
-                    qBtn.onclick = () => jumpToSongPart(targetId);
+                    qBtn.onclick = () => triggerSongPart(targetId);
                     quickBar.appendChild(qBtn);
 
                     partCounter++;
@@ -642,21 +635,23 @@
             document.getElementById('key-val').innerText = currentSemitones > 0 ? `+${currentSemitones}` : currentSemitones;
         }
 
-        // Function para i-highlight ng yellow at i-center sa screen ang part
-        function highlightAndCenterPart(targetId) {
-            // Alisin muna ang highlight sa lahat
+        // Universal function para sa stable centering at active highlight sa standalone container
+        function applyUniversalHighlightAndCenter(targetId) {
             document.querySelectorAll('.song-part').forEach(el => el.classList.remove('active-part'));
 
             const targetEl = document.getElementById(targetId);
-            if (targetEl) {
+            const outputBox = document.getElementById('output');
+            
+            if (targetEl && outputBox) {
                 targetEl.classList.add('active-part');
-                targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                // Gamitin ang scrollIntoView sa loob ng standalone output box para pantay sa lahat ng mobile screen
+                targetEl.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
             }
         }
 
-        function jumpToSongPart(targetId) {
-            highlightAndCenterPart(targetId);
-            broadcastLiveState({ targetPartId: targetId });
+        function triggerSongPart(targetId) {
+            applyUniversalHighlightAndCenter(targetId);
+            broadcastLiveState({ activePartId: targetId });
         }
 
         function transpose(amount) {
