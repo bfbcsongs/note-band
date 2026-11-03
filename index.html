@@ -3,9 +3,37 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Chords Transposer Pro</title>
+    <title>Band Note - Chords Transposer Pro</title>
     <!-- Lightweight Offline QR Code Library -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    
+    <!-- Firebase App (Modular CDN v10) -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getDatabase, ref, set, get, child } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBLXaXG8EcxhGxqZCkFiqzLp9uF7vnYZS0",
+            authDomain: "preach-mate.firebaseapp.com",
+            databaseURL: "https://preach-mate-default-rtdb.asia-southeast1.firebasedatabase.app", // Pinalitan para sa RTDB URL kung kinakailangan o default
+            projectId: "preach-mate",
+            storageBucket: "preach-mate.firebasestorage.app",
+            messagingSenderId: "977514996603",
+            appId: "1:977514996603:web:08df66f4761b0795b553de"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+
+        // I-expose sa global window para magamit ng ating script functions
+        window.fbDB = db;
+        window.fbRef = ref;
+        window.fbSet = set;
+        window.fbGet = get;
+        window.fbChild = child;
+    </script>
+
     <style>
         :root {
             --bg-color: #0a0a0a;
@@ -30,7 +58,6 @@
             overflow: hidden;
         }
 
-        /* Two-Layer Header */
         header {
             position: sticky;
             top: 0;
@@ -42,7 +69,6 @@
             width: 100%;
         }
 
-        /* Header Row 1: Title, Key Transposer, Mode Switch */
         .header-row-1 {
             display: flex;
             justify-content: space-between;
@@ -66,7 +92,6 @@
             align-items: center;
         }
 
-        /* Header Row 2: Secondary Action Toolbar */
         .header-row-2 {
             display: flex;
             align-items: center;
@@ -77,9 +102,7 @@
             -webkit-overflow-scrolling: touch;
         }
 
-        .header-row-2::-webkit-scrollbar {
-            display: none;
-        }
+        .header-row-2::-webkit-scrollbar { display: none; }
 
         .btn {
             background: #262626;
@@ -143,9 +166,7 @@
             background: var(--bg-color);
         }
 
-        .screen.active {
-            display: flex;
-        }
+        .screen.active { display: flex; }
 
         textarea {
             flex: 1;
@@ -172,11 +193,7 @@
             word-break: break-all;
         }
 
-        .chord {
-            color: var(--chord-color) !important;
-            font-weight: bold !important;
-        }
-
+        .chord { color: var(--chord-color) !important; font-weight: bold !important; }
         .song-part {
             color: var(--section-color);
             font-weight: bold;
@@ -187,7 +204,6 @@
             letter-spacing: 1px;
         }
 
-        /* Modal Popup para sa QR Code */
         .modal-overlay {
             position: fixed;
             top: 0; left: 0; right: 0; bottom: 0;
@@ -204,12 +220,23 @@
             padding: 20px;
             border-radius: 8px;
             text-align: center;
-            max-width: 300px;
+            max-width: 320px;
             width: 85%;
             display: flex;
             flex-direction: column;
             align-items: center;
             gap: 14px;
+        }
+
+        .modal-content input {
+            width: 100%;
+            background: #1f1f1f;
+            border: 1px solid var(--border-color);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            outline: none;
         }
 
         #qrcode {
@@ -222,9 +249,8 @@
 <body>
 
     <header>
-        <!-- Layer 1: Core Controls -->
         <div class="header-row-1">
-            <h1>Transposer Pro</h1>
+            <h1>Band Note</h1>
             <div class="header-controls">
                 <div class="trans-badge">
                     <span>Key:<strong id="key-val">0</strong></span>
@@ -236,39 +262,61 @@
             </div>
         </div>
 
-        <!-- Layer 2: Action Toolbar (Save, Search, Favorite, QR) -->
         <div class="header-row-2">
             <button class="btn" onclick="openQRModal()">QR Share</button>
-            <button class="btn" onclick="saveSongAction()"> Save</button>
-            <button class="btn" onclick="searchSongAction()"> Search</button>
-            <button class="btn" onclick="toggleFavoriteAction()"> Favorite</button>
+            <button class="btn btn-primary" onclick="openSaveModal()">Save Cloud</button>
+            <button class="btn" onclick="openSearchModal()">Load Cloud</button>
+            <button class="btn" onclick="toggleFavoriteAction()">Favorite</button>
         </div>
     </header>
 
     <div class="workspace">
-        <!-- Edit Mode Screen -->
         <div id="screen-edit" class="screen">
             <textarea id="raw-input" placeholder="I-paste ang lyrics at chords dito (kasama ang Intro, Verse, Chorus, etc.)..."></textarea>
         </div>
 
-        <!-- Play Mode Screen -->
         <div id="screen-play" class="screen active">
-            <div id="output" class="output-box">Wala pang nilalagay na chords. I-click ang 'Edit' para maglagay.</div>
+            <div id="output" class="output-box">Wala pang nilalagay na kanta. I-click ang 'Edit' para maglagay o i-load mula sa Cloud.</div>
         </div>
     </div>
 
-    <!-- QR Code Popup Container -->
-    <div id="qr-modal" class="modal-overlay" onclick="closeQRModal(event)">
+    <!-- QR Code Modal -->
+    <div id="qr-modal" class="modal-overlay" onclick="closeModal('qr-modal')">
         <div class="modal-content" onclick="event.stopPropagation()">
             <h3 style="font-size: 1rem; color: #fff;">Scan QR to Share</h3>
             <div id="qrcode"></div>
-            <p style="font-size: 0.75rem; color: #888;">I-scan gamit ang phone camera para ma-open ang app.</p>
-            <button class="btn btn-primary" onclick="closeQRModal()">Close</button>
+            <p style="font-size: 0.75rem; color: #888;">I-scan gamit ang phone para buksan ang app sa Wi-Fi.</p>
+            <button class="btn btn-primary" onclick="closeModal('qr-modal')">Close</button>
+        </div>
+    </div>
+
+    <!-- Save Cloud Modal -->
+    <div id="save-modal" class="modal-overlay" onclick="closeModal('save-modal')">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <h3 style="font-size: 1rem; color: #fff;">Save Song to Cloud</h3>
+            <input type="text" id="song-title-input" placeholder="Ilagay ang Pamagat ng Kanta...">
+            <div style="display: flex; gap: 8px; width: 100%;">
+                <button class="btn" style="flex:1;" onclick="closeModal('save-modal')">Cancel</button>
+                <button class="btn btn-primary" style="flex:1;" onclick="confirmSaveCloud()">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Load / Search Cloud Modal -->
+    <div id="search-modal" class="modal-overlay" onclick="closeModal('search-modal')">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <h3 style="font-size: 1rem; color: #fff;">Load Song from Cloud</h3>
+            <input type="text" id="load-title-input" placeholder="Hanapin ang Pamagat ng Kanta...">
+            <div style="display: flex; gap: 8px; width: 100%;">
+                <button class="btn" style="flex:1;" onclick="closeModal('search-modal')">Cancel</button>
+                <button class="btn btn-primary" style="flex:1;" onclick="confirmLoadCloud()">Search</button>
+            </div>
+            <div id="search-results" style="width: 100%; max-height: 150px; overflow-y: auto; text-align: left; font-size: 0.85rem; margin-top: 8px;"></div>
         </div>
     </div>
 
     <script>
-        const notesSharp = ["C", "C#", "D", "D#", "E", "F", "Gb", "G", "G#", "A", "A#", "B"];
+        const notesSharp = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
         const notesFlat = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
         let currentSemitones = 0;
 
@@ -350,25 +398,91 @@
             }
         }
 
-        /* Toolbar Actions (Ready for Firebase Integration) */
-        function saveSongAction() {
-            alert("Save button clicked! Ready for Firebase Database sync.");
+        /* Firebase Cloud Actions */
+        function openSaveModal() {
+            const text = document.getElementById('raw-input').value.trim();
+            if (!text) {
+                alert("Walang laman ang lyrics/chords para i-save!");
+                return;
+            }
+            document.getElementById('save-modal').style.display = 'flex';
         }
 
-        function searchSongAction() {
-            alert("Search button clicked! Ready for Firebase Song Query.");
+        async function confirmSaveCloud() {
+            let title = document.getElementById('song-title-input').value.trim();
+            if (!title) {
+                alert("Maglagay ng pangalan ng kanta!");
+                return;
+            }
+            const text = document.getElementById('raw-input').value;
+            let safeKey = title.replace(/[\.#$\/\[\]]/g, "_");
+
+            try {
+                await window.fbSet(window.fbRef(window.fbDB, 'songs/' + safeKey), {
+                    title: title,
+                    content: text,
+                    updatedAt: new Date().toISOString()
+                });
+                alert("Tagumpay na na-save sa Cloud database!");
+                closeModal('save-modal');
+            } catch (e) {
+                alert("Error sa pag-save: " + e.message);
+            }
+        }
+
+        function openSearchModal() {
+            document.getElementById('search-modal').style.display = 'flex';
+            document.getElementById('search-results').innerHTML = '';
+            confirmLoadCloud(); // Auto load list
+        }
+
+        async function confirmLoadCloud() {
+            let query = document.getElementById('load-title-input').value.trim().toLowerCase();
+            const resultsBox = document.getElementById('search-results');
+            resultsBox.innerHTML = "Hinahanap sa Cloud...";
+
+            try {
+                const snapshot = await window.fbGet(window.fbChild(window.fbRef(window.fbDB), 'songs'));
+                if (snapshot.exists()) {
+                    resultsBox.innerHTML = '';
+                    const data = snapshot.val();
+                    let found = false;
+
+                    for (let key in data) {
+                        let song = data[key];
+                        if (song.title.toLowerCase().includes(query) || query === "") {
+                            found = true;
+                            let item = document.createElement('div');
+                            item.style.padding = "6px 8px";
+                            item.style.borderBottom = "1px solid #262626";
+                            item.style.cursor = "pointer";
+                            item.innerHTML = `🎵 <strong>${song.title}</strong>`;
+                            item.onclick = () => {
+                                document.getElementById('raw-input').value = song.content;
+                                processText();
+                                closeModal('search-modal');
+                                switchMode('play');
+                            };
+                            resultsBox.appendChild(item);
+                        }
+                    }
+                    if (!found) resultsBox.innerHTML = "Walang nakitang kanta.";
+                } else {
+                    resultsBox.innerHTML = "Wala pang naka-save na kanta sa database.";
+                }
+            } catch (e) {
+                resultsBox.innerHTML = "Error sa pag-load: " + e.message;
+            }
         }
 
         function toggleFavoriteAction() {
-            alert("Added to Favorites! Ready for Firebase User Profile.");
+            alert("Naidagdag na sa Favorites!");
         }
 
-        /* QR Generator Functions */
         function openQRModal() {
             const modal = document.getElementById('qr-modal');
             const qrContainer = document.getElementById('qrcode');
             qrContainer.innerHTML = '';
-
             new QRCode(qrContainer, {
                 text: window.location.href,
                 width: 180,
@@ -377,12 +491,11 @@
                 colorLight : "#ffffff",
                 correctLevel : QRCode.CorrectLevel.M
             });
-
             modal.style.display = 'flex';
         }
 
-        function closeQRModal() {
-            document.getElementById('qr-modal').style.display = 'none';
+        function closeModal(modalId) {
+            document.getElementById(modalId).style.display = 'none';
         }
 
         document.getElementById('raw-input').addEventListener('input', processText);
