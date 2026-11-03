@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Band Note - Chords Transposer Pro</title>
+    <title>Band Note - Modular Chords Pro</title>
     <!-- Lightweight Offline QR Code Library -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     
@@ -133,6 +133,8 @@
         .btn-lineup:hover { background: #7c3aed; }
         .btn-sync { background: #374151; border: 1px solid #4b5563; }
         .btn-sync.active { background: var(--sync-on); color: #000; font-weight: bold; border: none; }
+        .btn-part { background: #1e293b; color: #38bdf8; border: 1px solid #334155; font-size: 0.7rem; padding: 4px 8px; }
+        .btn-part:hover { background: #334155; }
 
         .trans-badge {
             display: flex;
@@ -180,13 +182,30 @@
 
         .screen.active { display: flex; }
 
+        .edit-container {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            padding: 10px;
+            gap: 8px;
+        }
+
+        .part-toolbar {
+            display: flex;
+            gap: 4px;
+            overflow-x: auto;
+            padding-bottom: 4px;
+            background: #111;
+            border-bottom: 1px solid var(--border-color);
+        }
+
         textarea {
             flex: 1;
             width: 100%;
             background: transparent;
             color: var(--text-primary);
             border: none;
-            padding: 16px;
+            padding: 10px;
             font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace;
             font-size: 0.95rem;
             line-height: 1.6;
@@ -198,6 +217,7 @@
         .output-box {
             flex: 1;
             padding: 16px;
+            padding-bottom: 70px; /* Dagdag space para sa floating bar */
             overflow-y: auto;
             font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace;
             font-size: 0.95rem;
@@ -207,16 +227,38 @@
             -webkit-overflow-scrolling: touch;
         }
 
+        /* Floating Quick-Jump Bar sa Live/Play Mode */
+        .floating-quick-bar {
+            position: absolute;
+            bottom: 12px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(20, 20, 20, 0.9);
+            border: 1px solid var(--border-color);
+            padding: 6px 10px;
+            border-radius: 20px;
+            display: flex;
+            gap: 6px;
+            overflow-x: auto;
+            max-width: 95%;
+            backdrop-filter: blur(5px);
+            z-index: 50;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+        }
+        .floating-quick-bar::-webkit-scrollbar { display: none; }
+
         .chord { color: var(--chord-color) !important; font-weight: bold !important; }
         .song-part {
             color: var(--section-color);
             font-weight: bold;
-            margin-top: 12px;
+            margin-top: 14px;
             display: inline-block;
             text-transform: uppercase;
             font-size: 0.9rem;
             letter-spacing: 1px;
+            cursor: pointer;
         }
+        .song-part:hover { color: #fff; }
 
         .modal-overlay {
             position: fixed;
@@ -308,13 +350,32 @@
     </header>
 
     <div class="workspace">
+        <!-- Edit Mode na may Song Part Toolbar -->
         <div id="screen-edit" class="screen">
-            <textarea id="raw-input" placeholder="I-paste ang lyrics at chords dito..." oninput="processText()"></textarea>
+            <div class="edit-container">
+                <div class="part-toolbar">
+                    <span style="font-size: 0.75rem; color: #888; align-self: center; margin-right: 4px;">Insert Part:</span>
+                    <button class="btn btn-part" onclick="insertSongPart('INTRO')">[Intro]</button>
+                    <button class="btn btn-part" onclick="insertSongPart('VERSE 1')">[Verse 1]</button>
+                    <button class="btn btn-part" onclick="insertSongPart('VERSE 2')">[Verse 2]</button>
+                    <button class="btn btn-part" onclick="insertSongPart('CHORUS')">[Chorus]</button>
+                    <button class="btn btn-part" onclick="insertSongPart('BRIDGE')">[Bridge]</button>
+                    <button class="btn btn-part" onclick="insertSongPart('REFRAIN')">[Refrain]</button>
+                    <button class="btn btn-part" onclick="insertSongPart('ADLIB')">[Adlib]</button>
+                    <button class="btn btn-part" onclick="insertSongPart('OUTRO')">[Outro]</button>
+                </div>
+                <textarea id="raw-input" placeholder="I-type o i-paste ang lyrics at chords dito..." oninput="processText()"></textarea>
+            </div>
         </div>
 
+        <!-- Play / Live Mode na may Floating Quick-Jump Bar -->
         <div id="screen-play" class="screen active">
-            <!-- Naka-bind ang scroll event para mag-sync sa iba kapag ikaw ang nag-scroll -->
             <div id="output" class="output-box" onscroll="handleScrollSync()">Wala pang nilalagay na chords. I-click ang 'Songs' o 'Line Up' para pumili.</div>
+            <!-- Floating Quick-Jump Bar -->
+            <div id="floating-quick-bar" class="floating-quick-bar">
+                <span style="font-size: 0.7rem; color: #aaa; align-self: center;">Jump:</span>
+                <!-- Dynamic ilalagay dito ang mga quick jump buttons batay sa kanta -->
+            </div>
         </div>
     </div>
 
@@ -414,7 +475,7 @@
         let pendingAssignSong = null;
 
         let isLiveSyncEnabled = true;
-        let isReceivingRemoteUpdate = false; // Bandila para maiwasan ang infinite loop sa scroll
+        let isReceivingRemoteUpdate = false;
 
         const lineupCategories = ["Opening", "Joyful", "Solemn", "Offering", "Closing", "Others"];
 
@@ -427,20 +488,17 @@
                     const data = snapshot.val();
                     isReceivingRemoteUpdate = true;
 
-                    // I-update ang kanta kung iba
                     if (data.content && data.content !== document.getElementById('raw-input').value) {
                         document.getElementById('raw-input').value = data.content;
                         currentSongTitle = data.title || "Untitled";
                         processText();
                     }
 
-                    // I-update ang semitones/key kung nagbago
                     if (data.semitones !== undefined && data.semitones !== currentSemitones) {
                         currentSemitones = data.semitones;
                         processText();
                     }
 
-                    // I-update ang scroll position ng output box
                     const outputBox = document.getElementById('output');
                     if (data.scrollTop !== undefined && Math.abs(outputBox.scrollTop - data.scrollTop) > 5) {
                         outputBox.scrollTop = data.scrollTop;
@@ -503,8 +561,27 @@
             return notesSharp[newIdx] + suffix;
         }
 
+        // Mag-insert ng Song Part sa Edit Mode kung saan nakaposisyon ang cursor
+        function insertSongPart(partName) {
+            const textarea = document.getElementById('raw-input');
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+            const text = textarea.value;
+            
+            const insertion = `\n[${partName}]\n`;
+            textarea.value = text.substring(0, start) + insertion + text.substring(end);
+            textarea.selectionStart = textarea.selectionEnd = start + insertion.length;
+            textarea.focus();
+            processText();
+        }
+
         function processText() {
             const text = document.getElementById('raw-input').value;
+            const quickBar = document.getElementById('floating-quick-bar');
+            
+            // Panatilihin ang Jump label
+            quickBar.innerHTML = '<span style="font-size: 0.7rem; color: #aaa; align-self: center;">Jump:</span>';
+
             if (!text.trim()) {
                 document.getElementById('output').innerText = "Wala pang nilalagay na chords. I-click ang 'Songs' o 'Line Up' para pumili.";
                 document.getElementById('app-title-display').innerText = "Band Note (Untitled)";
@@ -514,14 +591,33 @@
             const lines = text.split('\n');
             let htmlOutput = '';
             const chordRegex = /\b([A-G][#b]?(?:m|maj|min|dim|aug|sus|7|9|11|13)?(?:\/[A-G][#b]?)?)\b/g;
-            const partRegex = /^(?:\[.*\]|Intro|Verse\s*\d*|Chorus|Pre-Chorus|Bridge|Outro|Instrumental|Interlude|VERVE|CHORUS)\s*[:]?$/i;
+            // Kinikilala ang mga bracketed parts o standard parts tulad ng [VERSE 1], INTRO, CHORUS, atbp.
+            const partRegex = /^(?:\[(.*?)\]|Intro|Verse\s*\d*|Chorus|Pre-Chorus|Bridge|Outro|Instrumental|Interlude|Refrain|Adlib)\s*[:]?$/i;
+
+            let partCounter = 0;
 
             for (let i = 0; i < lines.length; i++) {
                 let line = lines[i];
+                let trimmed = line.trim();
                 let escapedLine = line.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
                 
-                if (partRegex.test(line.trim())) {
-                    htmlOutput += `<span class="song-part">${escapedLine}</span>\n`;
+                let matchPart = trimmed.match(partRegex);
+                if (matchPart) {
+                    let partLabel = matchPart[1] || matchPart[0];
+                    let targetId = `part-item-${partCounter}`;
+                    
+                    // Idagdag ang HTML tag na may ID para sa pag-scroll
+                    htmlOutput += `<span id="${targetId}" class="song-part">${escapedLine}</span>\n`;
+
+                    // Gumawa ng Floating Quick-Jump Button para sa part na ito
+                    let qBtn = document.createElement('button');
+                    qBtn.className = 'btn btn-part';
+                    qBtn.style.padding = '3px 8px';
+                    qBtn.innerText = partLabel;
+                    qBtn.onclick = () => jumpToSongPart(targetId);
+                    quickBar.appendChild(qBtn);
+
+                    partCounter++;
                 } else {
                     let formattedLine = escapedLine.replace(chordRegex, (match) => {
                         let transposed = match.includes('/') 
@@ -537,10 +633,21 @@
             document.getElementById('key-val').innerText = currentSemitones > 0 ? `+${currentSemitones}` : currentSemitones;
         }
 
+        // Function para i-auto position / i-scroll sa gitna ang part kapag pinindot ang floating button
+        function jumpToSongPart(targetId) {
+            const targetEl = document.getElementById(targetId);
+            const outputBox = document.getElementById('output');
+            if (targetEl) {
+                const topPos = targetEl.offsetTop - outputBox.offsetTop - 20;
+                outputBox.scrollTo({ top: topPos, behavior: 'smooth' });
+                broadcastLiveState();
+            }
+        }
+
         function transpose(amount) {
             currentSemitones += amount;
             processText();
-            broadcastLiveState(); // I-sync ang pagpapalit ng key sa lahat
+            broadcastLiveState();
         }
 
         function toggleEditPlayMode() {
@@ -811,7 +918,7 @@
                 closeModal('delete-modal');
                 fetchCloudSongs();
             } catch (e) {
-                alert("Error sa pagbura: " + e.message);
+                alert("Error sa pagbura: " + e.message.toString());
             }
         }
 
