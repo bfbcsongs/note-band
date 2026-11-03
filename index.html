@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Band Note - Smart Dynamic Pro</title>
+    <title>Band Note - Democratic Sync Pro</title>
     <!-- Lightweight Offline QR Code Library -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     
@@ -48,7 +48,7 @@
             --danger-color: #ef4444;
             --lineup-color: #8b5cf6;
             --sync-on: #10b981;
-            --highlight-color: #facc15; /* Yellow/Amber highlight tint */
+            --highlight-color: #facc15;
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -218,7 +218,6 @@
             tab-size: 4;
         }
 
-        /* Standalone Scroll Viewport */
         .output-box {
             flex: 1;
             padding: 16px;
@@ -273,7 +272,6 @@
         }
         .song-part-title:hover { color: #fff; }
 
-        /* Yellow-tinted active highlight para sa buong bloke ng kanta */
         .song-part-block.active-block {
             background-color: rgba(250, 204, 21, 0.15);
             border-left: 4px solid var(--highlight-color);
@@ -386,7 +384,7 @@
                     <button class="btn btn-part" onclick="insertSongPart('ADLIB')">Adlib</button>
                     <button class="btn btn-part" onclick="insertSongPart('OUTRO')">Outro</button>
                 </div>
-                <textarea id="raw-input" placeholder="I-type o i-paste ang lyrics at chords dito..." oninput="processText()"></textarea>
+                <textarea id="raw-input" placeholder="I-type o i-paste ang lyrics at chords dito..." oninput="processText(); broadcastLiveState();"></textarea>
             </div>
         </div>
 
@@ -498,7 +496,7 @@
 
         const lineupCategories = ["Opening", "Joyful", "Solemn", "Offering", "Closing", "Others"];
 
-        // --- FIREBASE SYNC LISTENER ---
+        // --- DEMOCRATIC SHARED SYNC LISTENER ---
         window.addEventListener('DOMContentLoaded', () => {
             const liveRef = window.fbRef(window.fbDB, 'live_session');
             window.fbOnValue(liveRef, (snapshot) => {
@@ -582,7 +580,7 @@
             broadcastLiveState();
         }
 
-        // Hinati natin ang mga kanta sa bawat section block para may sarili silang wrapper container
+        // Universal Bracket Detector (Sumasalo sa kahit anong custom bracket tulad ng [Bridge II], [Verse 3], atbp.)
         function processText() {
             const text = document.getElementById('raw-input').value;
             const quickBar = document.getElementById('floating-quick-bar');
@@ -598,7 +596,7 @@
             const lines = text.split('\n');
             let htmlOutput = '';
             const chordRegex = /\b([A-G][#b]?(?:m|maj|min|dim|aug|sus|7|9|11|13)?(?:\/[A-G][#b]?)?)\b/g;
-            const partRegex = /^(?:\[(.*?)\]|Intro|Verse\s*\d*|Chorus|Pre-Chorus|Bridge|Outro|Instrumental|Interlude|Refrain|Adlib)\s*[:]?$/i;
+            const bracketPartRegex = /^\[(.*?)\]\s*$/;
 
             let partCounter = 0;
             let insideBlock = false;
@@ -608,16 +606,16 @@
                 let trimmed = line.trim();
                 let escapedLine = line.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
                 
-                let matchPart = trimmed.match(partRegex);
+                let matchPart = trimmed.match(bracketPartRegex);
                 if (matchPart) {
                     if (insideBlock) {
-                        htmlOutput += `</div>\n`; // Isara ang naunang block
+                        htmlOutput += `</div>\n`;
                     }
-                    let partLabel = matchPart[1] || matchPart[0];
+                    let partLabel = matchPart[1];
                     let blockId = `block-${partCounter}`;
                     
                     htmlOutput += `<div id="${blockId}" class="song-part-block">\n`;
-                    htmlOutput += `<span class="song-part-title" onclick="triggerSongPart('${blockId}')">${escapedLine}</span>\n`;
+                    htmlOutput += `<span class="song-part-title" onclick="triggerSongPart('${blockId}')">[${partLabel}]</span>\n`;
 
                     let qBtn = document.createElement('button');
                     qBtn.className = 'btn btn-part';
@@ -650,7 +648,7 @@
             document.getElementById('key-val').innerText = currentSemitones > 0 ? `+${currentSemitones}` : currentSemitones;
         }
 
-        // Smart Centering batay sa kabuuang taas/laki ng bloke (Line-Count Center Reference)
+        // Line-Count Dynamic Centering batay sa buong haba ng bloke
         function centerAndHighlightBlock(blockId) {
             document.querySelectorAll('.song-part-block').forEach(el => el.classList.remove('active-block'));
 
@@ -660,7 +658,6 @@
             if (targetBlock && outputBox) {
                 targetBlock.classList.add('active-block');
                 
-                // Kinukuha ang eksaktong gitna ng buong bloke ng kanta para walang ma-cut off sa itaas o ibaba
                 const blockTop = targetBlock.offsetTop;
                 const blockHeight = targetBlock.offsetHeight;
                 const boxHeight = outputBox.clientHeight;
