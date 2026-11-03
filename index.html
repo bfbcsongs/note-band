@@ -182,24 +182,26 @@
 
         .screen.active { display: flex; }
 
-        /* Floating Selection Menu na lilitaw kapag nag-highlight sa edit mode */
-        .selection-popup {
-            position: absolute;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: #1e1e1e;
-            border: 1px solid var(--accent-color);
-            padding: 8px 12px;
-            border-radius: 8px;
-            display: none;
-            gap: 6px;
-            overflow-x: auto;
-            max-width: 95%;
-            z-index: 200;
-            box-shadow: 0 4px 16px rgba(0,0,0,0.8);
+        /* Edit container para sa permanenteng part toolbar sa itaas ng textarea */
+        .edit-container {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            background: var(--bg-color);
         }
-        .selection-popup::-webkit-scrollbar { display: none; }
+
+        .edit-toolbar {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 12px;
+            background: #121212;
+            border-bottom: 1px solid var(--border-color);
+            overflow-x: auto;
+            flex-shrink: 0;
+            -webkit-overflow-scrolling: touch;
+        }
+        .edit-toolbar::-webkit-scrollbar { display: none; }
 
         textarea {
             flex: 1;
@@ -351,21 +353,21 @@
     </header>
 
     <div class="workspace">
-        <!-- Edit Mode na may Text Selection Popup -->
+        <!-- Edit Mode na may Permanenteng Toolbar sa Itaas (Hindi natatakpan ng keyboard) -->
         <div id="screen-edit" class="screen">
-            <textarea id="raw-input" placeholder="I-type o i-paste ang lyrics at chords dito..." oninput="processText()" onmouseup="checkTextSelection()" ontouchend="checkTextSelection()"></textarea>
-            
-            <!-- Floating popup na lilitaw kapag nag-highlight ng text -->
-            <div id="selection-popup" class="selection-popup">
-                <span style="font-size: 0.75rem; color: #aaa; align-self: center;">Assign Part:</span>
-                <button class="btn btn-part" onclick="applySongPart('INTRO')">Intro</button>
-                <button class="btn btn-part" onclick="applySongPart('VERSE 1')">Verse 1</button>
-                <button class="btn btn-part" onclick="applySongPart('VERSE 2')">Verse 2</button>
-                <button class="btn btn-part" onclick="applySongPart('CHORUS')">Chorus</button>
-                <button class="btn btn-part" onclick="applySongPart('BRIDGE')">Bridge</button>
-                <button class="btn btn-part" onclick="applySongPart('REFRAIN')">Refrain</button>
-                <button class="btn btn-part" onclick="applySongPart('ADLIB')">Adlib</button>
-                <button class="btn btn-part" onclick="applySongPart('OUTRO')">Outro</button>
+            <div class="edit-container">
+                <div class="edit-toolbar">
+                    <span style="font-size: 0.75rem; color: #888; font-weight: bold; flex-shrink: 0;">Insert Part:</span>
+                    <button class="btn btn-part" onclick="insertSongPart('INTRO')">Intro</button>
+                    <button class="btn btn-part" onclick="insertSongPart('VERSE 1')">Verse 1</button>
+                    <button class="btn btn-part" onclick="insertSongPart('VERSE 2')">Verse 2</button>
+                    <button class="btn btn-part" onclick="insertSongPart('CHORUS')">Chorus</button>
+                    <button class="btn btn-part" onclick="insertSongPart('BRIDGE')">Bridge</button>
+                    <button class="btn btn-part" onclick="insertSongPart('REFRAIN')">Refrain</button>
+                    <button class="btn btn-part" onclick="insertSongPart('ADLIB')">Adlib</button>
+                    <button class="btn btn-part" onclick="insertSongPart('OUTRO')">Outro</button>
+                </div>
+                <textarea id="raw-input" placeholder="I-type o i-paste ang lyrics at chords dito..." oninput="processText()"></textarea>
             </div>
         </div>
 
@@ -560,31 +562,17 @@
             return notesSharp[newIdx] + suffix;
         }
 
-        // Tinitingnan kung may hinighlight na text sa editor para lumitaw ang popup
-        function checkTextSelection() {
-            const textarea = document.getElementById('raw-input');
-            const popup = document.getElementById('selection-popup');
-            const selectedText = textarea.value.substring(textarea.selectionStart, textarea.selectionEnd).trim();
-
-            if (selectedText.length > 0) {
-                popup.style.display = 'flex';
-            } else {
-                popup.style.display = 'none';
-            }
-        }
-
-        // Nilalagyan ng bracket `[Part]` ang hinighlight na text
-        function applySongPart(partName) {
+        // Nag-iinsert ng Song Part kung saan nakaposisyon ang cursor sa textarea
+        function insertSongPart(partName) {
             const textarea = document.getElementById('raw-input');
             const start = textarea.selectionStart;
             const end = textarea.selectionEnd;
             const text = textarea.value;
-            const selectedText = text.substring(start, end);
 
-            const replacement = `\n[${partName}]\n${selectedText}\n`;
-            textarea.value = text.substring(0, start) + replacement + text.substring(end);
-            
-            document.getElementById('selection-popup').style.display = 'none';
+            const insertion = `\n[${partName}]\n`;
+            textarea.value = text.substring(0, start) + insertion + text.substring(end);
+            textarea.selectionStart = textarea.selectionEnd = start + insertion.length;
+            textarea.focus();
             processText();
             broadcastLiveState();
         }
@@ -674,7 +662,6 @@
                 editScreen.classList.add('active');
                 playScreen.classList.remove('active');
                 toggleBtn.innerText = "Play";
-                document.getElementById('selection-popup').style.display = 'none';
             }
         }
 
@@ -858,7 +845,7 @@
                                 <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100px;">🎵 ${song.title}</span>
                                 <div style="display: flex; gap: 3px;">
                                     <button class="btn btn-primary" style="padding: 3px 5px; font-size: 0.65rem;" onclick="cloudActionLoad('${key}')">Load</button>
-                                    <button class="btn" style="padding: 3px 5px; font-size: 0.65rem;" onclick="cloudActionEdit('${key}')">Edit</button>
+                                    <button class="btn" style="padding: 3px 5px; font-size: 0.65rem;" onclick="cloudActionEdit('${key}')";>Edit</button>
                                     <button class="btn btn-lineup" style="padding: 3px 5px; font-size: 0.65rem;" onclick="cloudActionAssign('${key}')">Assign</button>
                                     <button class="btn btn-danger" style="padding: 3px 5px; font-size: 0.65rem;" onclick="cloudActionDeleteOpen('${key}', '${song.title.replace(/'/g, "\\'")}')">Del</button>
                                 </div>
