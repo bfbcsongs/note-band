@@ -236,7 +236,7 @@
             gap: 14px;
         }
 
-        .modal-content input {
+        .modal-content input, .modal-content textarea {
             width: 100%;
             background: #1f1f1f;
             border: 1px solid var(--border-color);
@@ -291,7 +291,7 @@
         </div>
 
         <div class="header-row-2">
-            <button class="btn" onclick="newSong()">New Song</button>
+            <button class="btn btn-primary" onclick="openNewSongModal()">New Song</button>
             <button class="btn btn-primary" onclick="openMasterSaveModal()">Save</button>
             <button class="btn" onclick="openSearchModal()">Songs</button>
             <button class="btn btn-lineup" onclick="openLineUpModal()">Line Up</button>
@@ -306,6 +306,20 @@
 
         <div id="screen-play" class="screen active">
             <div id="output" class="output-box">Wala pang nilalagay na chords. I-click ang 'Songs' o 'Line Up' para pumili.</div>
+        </div>
+    </div>
+
+    <!-- New Song Modal (May dynamic Create button na lilitaw lang kapag filled na) -->
+    <div id="new-song-modal" class="modal-overlay" onclick="closeModal('new-song-modal')">
+        <div class="modal-content" onclick="event.stopPropagation()" style="max-width: 440px;">
+            <h3 style="font-size: 1rem; color: var(--accent-color);">Create New Song</h3>
+            <input type="text" id="new-song-title-input" placeholder="Ilagay ang Pamagat ng Kanta..." oninput="checkNewSongInputs()">
+            <textarea id="new-song-lyrics-input" placeholder="Ilagay ang Lyrics at Chords dito..." style="height: 160px; font-family: monospace; resize: none;" oninput="checkNewSongInputs()"></textarea>
+            <div style="display: flex; gap: 8px; width: 100%;">
+                <button class="btn" style="flex:1;" onclick="closeModal('new-song-modal')">Cancel</button>
+                <!-- Ang Create Button ay nakatago muna (display: none) at lilitaw lang kapag may laman na pareho -->
+                <button id="btn-create-song" class="btn btn-primary" style="flex:1; display: none;" onclick="confirmCreateNewSong()">Create</button>
+            </div>
         </div>
     </div>
 
@@ -413,20 +427,6 @@
             return notesSharp[newIdx] + suffix;
         }
 
-        function extractTitle(text) {
-            let lines = text.split('\n');
-            for (let line of lines) {
-                let clean = line.trim();
-                if (clean.startsWith('"') && clean.endsWith('"')) {
-                    return clean.replace(/"/g, '');
-                }
-                if (clean && !clean.toLowerCase().startsWith('by') && !clean.includes(':')) {
-                    return clean;
-                }
-            }
-            return "Untitled Song";
-        }
-
         function processText() {
             const text = document.getElementById('raw-input').value;
             if (!text.trim()) {
@@ -434,9 +434,6 @@
                 document.getElementById('app-title-display').innerText = "Band Note (Untitled)";
                 return;
             }
-
-            currentSongTitle = extractTitle(text);
-            document.getElementById('app-title-display').innerText = "Band Note - " + currentSongTitle;
 
             const lines = text.split('\n');
             let htmlOutput = '';
@@ -483,13 +480,55 @@
             }
         }
 
-        function newSong() {
-            if (confirm("Gusto mo bang gumawa ng bagong kanta?")) {
-                document.getElementById('raw-input').value = "";
-                currentSongTitle = "Untitled";
-                document.getElementById('app-title-display').innerText = "Band Note (Untitled)";
-                document.getElementById('output').innerText = "Wala pang nilalagay na kanta.";
-                switchScreen('edit');
+        /* --- NEW SONG MODAL ACTIONS --- */
+        function openNewSongModal() {
+            document.getElementById('new-song-title-input').value = "";
+            document.getElementById('new-song-lyrics-input').value = "";
+            document.getElementById('btn-create-song').style.display = 'none'; // Naka-hide muna habang blangko
+            document.getElementById('new-song-modal').style.display = 'flex';
+        }
+
+        // Tinitingnan kung may laman na ang title at lyrics para lumitaw ang Create button
+        function checkNewSongInputs() {
+            let title = document.getElementById('new-song-title-input').value.trim();
+            let lyrics = document.getElementById('new-song-lyrics-input').value.trim();
+            const createBtn = document.getElementById('btn-create-song');
+
+            if (title.length > 0 && lyrics.length > 0) {
+                createBtn.style.display = 'block'; // Lilitaw na ang create button
+            } else {
+                createBtn.style.display = 'none';
+            }
+        }
+
+        async function confirmCreateNewSong() {
+            let title = document.getElementById('new-song-title-input').value.trim();
+            let lyrics = document.getElementById('new-song-lyrics-input').value.trim();
+
+            if (!title || !lyrics) return;
+
+            currentSongTitle = title;
+            let formattedContent = `"${title}"\n\n` + lyrics;
+            let safeKey = title.replace(/[\.#$\/\[\]]/g, "_");
+
+            try {
+                // Awtomatikong i-save sa Cloud database
+                await window.fbSet(window.fbRef(window.fbDB, 'songs/' + safeKey), {
+                    title: title,
+                    content: formattedContent,
+                    updatedAt: new Date().toISOString()
+                });
+
+                // Ilagay sa editor at i-display sa play screen
+                document.getElementById('raw-input').value = formattedContent;
+                document.getElementById('app-title-display').innerText = "Band Note - " + currentSongTitle;
+                processText();
+                closeModal('new-song-modal');
+                
+                // Dadalhin ka agad sa Songs modal list para makita mo roon
+                openSearchModal();
+            } catch (e) {
+                alert("Error sa paglikha ng kanta: " + e.message);
             }
         }
 
@@ -566,8 +605,7 @@
                 alert("Walang laman ang lyrics/chords para ma-save!");
                 return;
             }
-            currentSongTitle = extractTitle(text);
-            document.getElementById('master-song-title-label').innerText = "I-overwrite ang kanta: " + currentSongTitle;
+            document.getElementById('master-song-title-label').innerText = "I-save ang kanta: " + currentSongTitle;
             document.getElementById('master-passkey-input').value = "";
             document.getElementById('save-modal').style.display = 'flex';
         }
