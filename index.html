@@ -10,7 +10,7 @@
     <!-- Firebase App (Modular CDN v10) -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getDatabase, ref, set, get, child, remove } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+        import { getDatabase, ref, set, get, child, remove, onValue, update } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyBLXaXG8EcxhGxqZCkFiqzLp9uF7vnYZS0",
@@ -31,6 +31,8 @@
         window.fbGet = get;
         window.fbChild = child;
         window.fbRemove = remove;
+        window.fbOnValue = onValue;
+        window.fbUpdate = update;
     </script>
 
     <style>
@@ -45,6 +47,7 @@
             --accent-hover: #2563eb;
             --danger-color: #ef4444;
             --lineup-color: #8b5cf6;
+            --sync-on: #10b981;
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -128,6 +131,8 @@
         .btn-danger:hover { background: #dc2626; }
         .btn-lineup { background: var(--lineup-color); border: none; color: #fff; }
         .btn-lineup:hover { background: #7c3aed; }
+        .btn-sync { background: #374151; border: 1px solid #4b5563; }
+        .btn-sync.active { background: var(--sync-on); color: #000; font-weight: bold; border: none; }
 
         .trans-badge {
             display: flex;
@@ -194,11 +199,10 @@
             flex: 1;
             padding: 16px;
             overflow-y: auto;
-            /* Ginamit ang eksaktong monospaced font stack para pantay ang lapad ng bawat letra at espasyo */
             font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace;
             font-size: 0.95rem;
             line-height: 1.6;
-            white-space: pre; /* Pinalitan ng 'pre' para hindi gumalaw ang mga custom spaces ng chords */
+            white-space: pre;
             tab-size: 4;
             -webkit-overflow-scrolling: touch;
         }
@@ -284,6 +288,7 @@
         <div class="header-row-1">
             <h1 id="app-title-display">Band Note (Untitled)</h1>
             <div class="header-controls">
+                <button id="btn-sync-toggle" class="btn btn-sync active" onclick="toggleLiveSync()">Live Sync: ON</button>
                 <div class="trans-badge">
                     <span>Key:<strong id="key-val">0</strong></span>
                     <button onclick="transpose(-1)">-</button>
@@ -308,7 +313,8 @@
         </div>
 
         <div id="screen-play" class="screen active">
-            <div id="output" class="output-box">Wala pang nilalagay na chords. I-click ang 'Songs' o 'Line Up' para pumili.</div>
+            <!-- Naka-bind ang scroll event para mag-sync sa iba kapag ikaw ang nag-scroll -->
+            <div id="output" class="output-box" onscroll="handleScrollSync()">Wala pang nilalagay na chords. I-click ang 'Songs' o 'Line Up' para pumili.</div>
         </div>
     </div>
 
@@ -407,7 +413,75 @@
         let cachedCloudSongs = {};
         let pendingAssignSong = null;
 
+        let isLiveSyncEnabled = true;
+        let isReceivingRemoteUpdate = false; // Bandila para maiwasan ang infinite loop sa scroll
+
         const lineupCategories = ["Opening", "Joyful", "Solemn", "Offering", "Closing", "Others"];
+
+        // --- FIREBASE REAL-TIME SYNC LISTENER ---
+        window.addEventListener('DOMContentLoaded', () => {
+            const liveRef = window.fbRef(window.fbDB, 'live_session');
+            window.fbOnValue(liveRef, (snapshot) => {
+                if (!isLiveSyncEnabled) return;
+                if (snapshot.exists()) {
+                    const data = snapshot.val();
+                    isReceivingRemoteUpdate = true;
+
+                    // I-update ang kanta kung iba
+                    if (data.content && data.content !== document.getElementById('raw-input').value) {
+                        document.getElementById('raw-input').value = data.content;
+                        currentSongTitle = data.title || "Untitled";
+                        processText();
+                    }
+
+                    // I-update ang semitones/key kung nagbago
+                    if (data.semitones !== undefined && data.semitones !== currentSemitones) {
+                        currentSemitones = data.semitones;
+                        processText();
+                    }
+
+                    // I-update ang scroll position ng output box
+                    const outputBox = document.getElementById('output');
+                    if (data.scrollTop !== undefined && Math.abs(outputBox.scrollTop - data.scrollTop) > 5) {
+                        outputBox.scrollTop = data.scrollTop;
+                    }
+
+                    setTimeout(() => { isReceivingRemoteUpdate = false; }, 100);
+                }
+            });
+        });
+
+        function broadcastLiveState(extraData = {}) {
+            if (!isLiveSyncEnabled || isReceivingRemoteUpdate) return;
+            const outputBox = document.getElementById('output');
+            const state = {
+                title: currentSongTitle,
+                content: document.getElementById('raw-input').value,
+                semitones: currentSemitones,
+                scrollTop: outputBox.scrollTop,
+                updatedAt: Date.now(),
+                ...extraData
+            };
+            window.fbSet(window.fbRef(window.fbDB, 'live_session'), state);
+        }
+
+        function handleScrollSync() {
+            if (!isReceivingRemoteUpdate) {
+                broadcastLiveState();
+            }
+        }
+
+        function toggleLiveSync() {
+            isLiveSyncEnabled = !isLiveSyncEnabled;
+            const btn = document.getElementById('btn-sync-toggle');
+            if (isLiveSyncEnabled) {
+                btn.innerText = "Live Sync: ON";
+                btn.classList.add('active');
+            } else {
+                btn.innerText = "Live Sync: OFF";
+                btn.classList.remove('active');
+            }
+        }
 
         function getNoteIndex(note) {
             let idx = notesSharp.indexOf(note);
@@ -466,6 +540,7 @@
         function transpose(amount) {
             currentSemitones += amount;
             processText();
+            broadcastLiveState(); // I-sync ang pagpapalit ng key sa lahat
         }
 
         function toggleEditPlayMode() {
@@ -478,6 +553,7 @@
                 editScreen.classList.remove('active');
                 playScreen.classList.add('active');
                 toggleBtn.innerText = "Edit";
+                broadcastLiveState();
             } else {
                 editScreen.classList.add('active');
                 playScreen.classList.remove('active');
@@ -527,6 +603,7 @@
                 processText();
                 closeModal('new-song-modal');
                 openSearchModal();
+                broadcastLiveState();
             } catch (e) {
                 alert("Error sa paglikha ng kanta: " + e.message);
             }
@@ -571,6 +648,7 @@
                 document.getElementById('screen-edit').classList.remove('active');
                 document.getElementById('screen-play').classList.add('active');
                 document.getElementById('btn-toggle-screen').innerText = "Edit";
+                broadcastLiveState();
             }
         }
 
@@ -689,6 +767,7 @@
                 document.getElementById('screen-edit').classList.remove('active');
                 document.getElementById('screen-play').classList.add('active');
                 document.getElementById('btn-toggle-screen').innerText = "Edit";
+                broadcastLiveState();
             }
         }
 
@@ -701,6 +780,7 @@
                 document.getElementById('screen-edit').classList.add('active');
                 document.getElementById('screen-play').classList.remove('active');
                 document.getElementById('btn-toggle-screen').innerText = "Play";
+                broadcastLiveState();
             }
         }
 
