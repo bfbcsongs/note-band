@@ -182,22 +182,24 @@
             color: var(--text-primary);
             border: none;
             padding: 16px;
-            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace;
             font-size: 0.95rem;
             line-height: 1.6;
             resize: none;
             outline: none;
+            tab-size: 4;
         }
 
         .output-box {
             flex: 1;
             padding: 16px;
             overflow-y: auto;
-            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-            font-size: 1rem;
-            line-height: 1.7;
-            white-space: pre-wrap;
-            word-break: break-all;
+            /* Ginamit ang eksaktong monospaced font stack para pantay ang lapad ng bawat letra at espasyo */
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace;
+            font-size: 0.95rem;
+            line-height: 1.6;
+            white-space: pre; /* Pinalitan ng 'pre' para hindi gumalaw ang mga custom spaces ng chords */
+            tab-size: 4;
             -webkit-overflow-scrolling: touch;
         }
 
@@ -295,6 +297,7 @@
             <button class="btn btn-primary" onclick="openMasterSaveModal()">Save</button>
             <button class="btn" onclick="openSearchModal()">Songs</button>
             <button class="btn btn-lineup" onclick="openLineUpModal()">Line Up</button>
+            <button class="btn" id="btn-toggle-screen" onclick="toggleEditPlayMode()">Edit</button>
             <button class="btn" onclick="openQRModal()">QR Share</button>
         </div>
     </header>
@@ -309,7 +312,7 @@
         </div>
     </div>
 
-    <!-- New Song Modal (May dynamic Create button na lilitaw lang kapag filled na) -->
+    <!-- New Song Modal -->
     <div id="new-song-modal" class="modal-overlay" onclick="closeModal('new-song-modal')">
         <div class="modal-content" onclick="event.stopPropagation()" style="max-width: 440px;">
             <h3 style="font-size: 1rem; color: var(--accent-color);">Create New Song</h3>
@@ -317,7 +320,6 @@
             <textarea id="new-song-lyrics-input" placeholder="Ilagay ang Lyrics at Chords dito..." style="height: 160px; font-family: monospace; resize: none;" oninput="checkNewSongInputs()"></textarea>
             <div style="display: flex; gap: 8px; width: 100%;">
                 <button class="btn" style="flex:1;" onclick="closeModal('new-song-modal')">Cancel</button>
-                <!-- Ang Create Button ay nakatago muna (display: none) at lilitaw lang kapag may laman na pareho -->
                 <button id="btn-create-song" class="btn btn-primary" style="flex:1; display: none;" onclick="confirmCreateNewSong()">Create</button>
             </div>
         </div>
@@ -438,7 +440,7 @@
             const lines = text.split('\n');
             let htmlOutput = '';
             const chordRegex = /\b([A-G][#b]?(?:m|maj|min|dim|aug|sus|7|9|11|13)?(?:\/[A-G][#b]?)?)\b/g;
-            const partRegex = /^(?:\[.*\]|Intro|Verse\s*\d*|Chorus|Pre-Chorus|Bridge|Outro|Instrumental|Interlude)\s*[:]?$/i;
+            const partRegex = /^(?:\[.*\]|Intro|Verse\s*\d*|Chorus|Pre-Chorus|Bridge|Outro|Instrumental|Interlude|VERVE|CHORUS)\s*[:]?$/i;
 
             for (let i = 0; i < lines.length; i++) {
                 let line = lines[i];
@@ -466,17 +468,20 @@
             processText();
         }
 
-        function switchScreen(screenName) {
+        function toggleEditPlayMode() {
             const editScreen = document.getElementById('screen-edit');
             const playScreen = document.getElementById('screen-play');
+            const toggleBtn = document.getElementById('btn-toggle-screen');
 
-            if (screenName === 'edit') {
-                editScreen.classList.add('active');
-                playScreen.classList.remove('active');
-            } else {
+            if (editScreen.classList.contains('active')) {
                 processText();
                 editScreen.classList.remove('active');
                 playScreen.classList.add('active');
+                toggleBtn.innerText = "Edit";
+            } else {
+                editScreen.classList.add('active');
+                playScreen.classList.remove('active');
+                toggleBtn.innerText = "Play";
             }
         }
 
@@ -484,18 +489,17 @@
         function openNewSongModal() {
             document.getElementById('new-song-title-input').value = "";
             document.getElementById('new-song-lyrics-input').value = "";
-            document.getElementById('btn-create-song').style.display = 'none'; // Naka-hide muna habang blangko
+            document.getElementById('btn-create-song').style.display = 'none';
             document.getElementById('new-song-modal').style.display = 'flex';
         }
 
-        // Tinitingnan kung may laman na ang title at lyrics para lumitaw ang Create button
         function checkNewSongInputs() {
             let title = document.getElementById('new-song-title-input').value.trim();
             let lyrics = document.getElementById('new-song-lyrics-input').value.trim();
             const createBtn = document.getElementById('btn-create-song');
 
             if (title.length > 0 && lyrics.length > 0) {
-                createBtn.style.display = 'block'; // Lilitaw na ang create button
+                createBtn.style.display = 'block';
             } else {
                 createBtn.style.display = 'none';
             }
@@ -512,20 +516,16 @@
             let safeKey = title.replace(/[\.#$\/\[\]]/g, "_");
 
             try {
-                // Awtomatikong i-save sa Cloud database
                 await window.fbSet(window.fbRef(window.fbDB, 'songs/' + safeKey), {
                     title: title,
                     content: formattedContent,
                     updatedAt: new Date().toISOString()
                 });
 
-                // Ilagay sa editor at i-display sa play screen
                 document.getElementById('raw-input').value = formattedContent;
                 document.getElementById('app-title-display').innerText = "Band Note - " + currentSongTitle;
                 processText();
                 closeModal('new-song-modal');
-                
-                // Dadalhin ka agad sa Songs modal list para makita mo roon
                 openSearchModal();
             } catch (e) {
                 alert("Error sa paglikha ng kanta: " + e.message);
@@ -568,7 +568,9 @@
                 currentSongTitle = lineupData[cat].title;
                 processText();
                 closeModal('lineup-modal');
-                switchScreen('play');
+                document.getElementById('screen-edit').classList.remove('active');
+                document.getElementById('screen-play').classList.add('active');
+                document.getElementById('btn-toggle-screen').innerText = "Edit";
             }
         }
 
@@ -684,7 +686,9 @@
                 currentSongTitle = cachedCloudSongs[key].title;
                 processText();
                 closeModal('search-modal');
-                switchScreen('play');
+                document.getElementById('screen-edit').classList.remove('active');
+                document.getElementById('screen-play').classList.add('active');
+                document.getElementById('btn-toggle-screen').innerText = "Edit";
             }
         }
 
@@ -694,7 +698,9 @@
                 currentSongTitle = cachedCloudSongs[key].title;
                 processText();
                 closeModal('search-modal');
-                switchScreen('edit');
+                document.getElementById('screen-edit').classList.add('active');
+                document.getElementById('screen-play').classList.remove('active');
+                document.getElementById('btn-toggle-screen').innerText = "Play";
             }
         }
 
