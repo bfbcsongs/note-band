@@ -314,7 +314,7 @@
         </div>
     </div>
 
-    <!-- Line Up Modal (Nagpapakita ng Opening, Joyful, Solemn, Offering, Closing, Others) -->
+    <!-- Line Up Modal -->
     <div id="lineup-modal" class="modal-overlay" onclick="closeModal('lineup-modal')">
         <div class="modal-content" onclick="event.stopPropagation()" style="max-width: 420px;">
             <h3 style="font-size: 1rem; color: var(--lineup-color);">Service Line Up</h3>
@@ -324,7 +324,7 @@
         </div>
     </div>
 
-    <!-- Assign Category Picker Modal (Lilitaw kapag pinindot ang Assign sa kanta) -->
+    <!-- Assign Category Picker Modal -->
     <div id="assign-category-modal" class="modal-overlay" onclick="closeModal('assign-category-modal')">
         <div class="modal-content" onclick="event.stopPropagation()">
             <h3 style="font-size: 1rem; color: var(--lineup-color);">Pumili ng Category sa Line Up</h3>
@@ -403,9 +403,8 @@
         let currentSongTitle = "Untitled";
         let songToDeleteKey = null;
         let cachedCloudSongs = {};
-        
-        // Pansamantalang hawak ang kanta na ia-assign sa Line Up mula sa listahan
         let pendingAssignSong = null;
+        let isNewSongMode = false; // Flag para malaman kung blangko ang sinisimulan
 
         const lineupCategories = ["Opening", "Joyful", "Solemn", "Offering", "Closing", "Others"];
 
@@ -501,10 +500,12 @@
 
         function newSong() {
             if (confirm("Gusto mo bang gumawa ng bagong kanta?")) {
+                isNewSongMode = true; // I-activate ang bagong kanta mode para hindi ma-overwrite ang luma habang blangko
                 document.getElementById('raw-input').value = "";
                 currentSongTitle = "Untitled";
                 document.getElementById('app-title-display').innerText = "Band Note (Untitled)";
                 document.getElementById('output').innerText = "Wala pang nilalagay na kanta.";
+                localStorage.removeItem('bandnote_draft'); // Burahin ang dating draft
                 switchScreen('edit');
             }
         }
@@ -541,6 +542,7 @@
         function loadLineUpSong(cat) {
             let lineupData = JSON.parse(localStorage.getItem('bandnote_lineup') || "{}");
             if (lineupData[cat]) {
+                isNewSongMode = false;
                 document.getElementById('raw-input').value = lineupData[cat].content;
                 currentSongTitle = lineupData[cat].title;
                 processText();
@@ -592,6 +594,7 @@
             };
 
             localStorage.setItem('bandnote_personal', JSON.stringify(personalSongs));
+            isNewSongMode = false;
             alert(`Na-save at na-overwrite ang "${currentSongTitle}" sa Local Storage!`);
         }
 
@@ -600,7 +603,11 @@
             if (text.trim()) {
                 currentSongTitle = extractTitle(text);
                 document.getElementById('app-title-display').innerText = "Band Note - " + currentSongTitle;
-                localStorage.setItem('bandnote_draft', text);
+                
+                // Kung nasa New Song mode at may nilagay na, ilagay muna sa draft nang hindi pilit na ine-overwrite ang huling kanta hangga't walang pinindot na Save
+                if (!isNewSongMode) {
+                    localStorage.setItem('bandnote_draft', text);
+                }
             }
         }
 
@@ -637,6 +644,7 @@
         function localActionLoad(title) {
             let personalSongs = JSON.parse(localStorage.getItem('bandnote_personal') || "{}");
             if (personalSongs[title]) {
+                isNewSongMode = false;
                 document.getElementById('raw-input').value = personalSongs[title].content;
                 currentSongTitle = title;
                 processText();
@@ -648,6 +656,7 @@
         function localActionEdit(title) {
             let personalSongs = JSON.parse(localStorage.getItem('bandnote_personal') || "{}");
             if (personalSongs[title]) {
+                isNewSongMode = false;
                 document.getElementById('raw-input').value = personalSongs[title].content;
                 currentSongTitle = title;
                 processText();
@@ -694,6 +703,7 @@
                     content: text,
                     updatedAt: new Date().toISOString()
                 });
+                isNewSongMode = false;
                 alert(`Tagumpay na na-overwrite at na-save sa Master Cloud ang "${currentSongTitle}"!`);
                 closeModal('save-modal');
             } catch (e) {
@@ -748,6 +758,7 @@
 
         function cloudActionLoad(key) {
             if (cachedCloudSongs[key]) {
+                isNewSongMode = false;
                 document.getElementById('raw-input').value = cachedCloudSongs[key].content;
                 currentSongTitle = cachedCloudSongs[key].title;
                 processText();
@@ -758,6 +769,7 @@
 
         function cloudActionEdit(key) {
             if (cachedCloudSongs[key]) {
+                isNewSongMode = false;
                 document.getElementById('raw-input').value = cachedCloudSongs[key].content;
                 currentSongTitle = cachedCloudSongs[key].title;
                 processText();
