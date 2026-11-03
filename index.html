@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Chords Transposer Pro</title>
+    <!-- Lightweight Offline QR Code Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
         :root {
             --bg-color: #0a0a0a;
@@ -54,9 +56,9 @@
             background: #262626;
             color: #fff;
             border: 1px solid #404040;
-            padding: 6px 12px;
+            padding: 6px 10px;
             border-radius: 4px;
-            font-size: 0.85rem;
+            font-size: 0.8rem;
             cursor: pointer;
             font-weight: 500;
         }
@@ -137,13 +139,11 @@
             word-break: break-all;
         }
 
-        /* High Visibility Green Chords */
         .chord {
             color: var(--chord-color) !important;
             font-weight: bold !important;
         }
 
-        /* Song Parts Highlight */
         .song-part {
             color: var(--section-color);
             font-weight: bold;
@@ -152,6 +152,37 @@
             text-transform: uppercase;
             font-size: 0.95rem;
             letter-spacing: 1px;
+        }
+
+        /* Modal Popup para sa QR Code */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.85);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .modal-content {
+            background: #141414;
+            border: 1px solid var(--border-color);
+            padding: 24px;
+            border-radius: 8px;
+            text-align: center;
+            max-width: 320px;
+            width: 90%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+        }
+
+        #qrcode {
+            padding: 12px;
+            background: #ffffff;
+            border-radius: 6px;
         }
     </style>
 </head>
@@ -165,6 +196,7 @@
                 <button onclick="transpose(-1)">-</button>
                 <button onclick="transpose(1)">+</button>
             </div>
+            <button class="btn" onclick="openQRModal()">QR Share</button>
             <button id="btn-play" class="btn btn-primary" onclick="switchMode('play')">Play</button>
             <button id="btn-edit" class="btn" onclick="switchMode('edit')">Edit</button>
         </div>
@@ -173,7 +205,7 @@
     <div class="workspace">
         <!-- Edit Mode Screen -->
         <div id="screen-edit" class="screen">
-            <textarea id="raw-input" placeholder="I-paste ang lyrics at chords dito (kasama ang Intro, Verse, Chorus, etc.)..."></textarea>
+            <textarea id="raw-input" placeholder="I-paste ang lyrics at chords dito..."></textarea>
         </div>
 
         <!-- Play Mode Screen -->
@@ -182,10 +214,21 @@
         </div>
     </div>
 
+    <!-- QR Code Popup Container -->
+    <div id="qr-modal" class="modal-overlay" onclick="closeQRModal(event)">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <h3 style="font-size: 1.1rem; color: #fff;">Scan QR to Share</h3>
+            <div id="qrcode"></div>
+            <p style="font-size: 0.8rem; color: #888;">I-scan gamit ang phone camera para mabilis na ma-share ang kanta o app.</p>
+            <button class="btn btn-primary" onclick="closeQRModal()">Close</button>
+        </div>
+    </div>
+
     <script>
         const notesSharp = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
         const notesFlat = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
         let currentSemitones = 0;
+        let qrInstance = null;
 
         function getNoteIndex(note) {
             let idx = notesSharp.indexOf(note);
@@ -263,6 +306,32 @@
                 btnPlay.classList.add('btn-primary');
                 btnEdit.classList.remove('btn-primary');
             }
+        }
+
+        /* QR Generator Functions */
+        function openQRModal() {
+            const modal = document.getElementById('qr-modal');
+            const qrContainer = document.getElementById('qrcode');
+            qrContainer.innerHTML = ''; // Clear previous QR
+
+            // Gumamit ng kasalukuyang URL o kanta
+            const currentText = document.getElementById('output').innerText;
+            const textToShare = window.location.href; // O baguhin sa currentText kung gustong i-share ang raw lyrics
+
+            qrInstance = new QRCode(qrContainer, {
+                text: textToShare,
+                width: 200,
+                height: 200,
+                colorDark : "#000000",
+                colorLight : "#ffffff",
+                correctLevel : QRCode.CorrectLevel.M
+            });
+
+            modal.style.display = 'flex';
+        }
+
+        function closeQRModal() {
+            document.getElementById('qr-modal').style.display = 'none';
         }
 
         document.getElementById('raw-input').addEventListener('input', processText);
