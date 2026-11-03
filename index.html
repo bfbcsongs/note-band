@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Band Note - Universal Standalone Pro</title>
+    <title>Band Note - Smart Dynamic Pro</title>
     <!-- Lightweight Offline QR Code Library -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     
@@ -218,7 +218,7 @@
             tab-size: 4;
         }
 
-        /* Standalone Scroll Viewport para pantay ang hitsura sa iba't ibang phone */
+        /* Standalone Scroll Viewport */
         .output-box {
             flex: 1;
             padding: 16px;
@@ -254,27 +254,33 @@
 
         .chord { color: var(--chord-color) !important; font-weight: bold !important; }
         
-        .song-part {
+        .song-part-block {
+            display: block;
+            margin-top: 14px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            transition: background 0.3s ease;
+        }
+
+        .song-part-title {
             color: var(--section-color);
             font-weight: bold;
-            margin-top: 14px;
-            display: inline-block;
             text-transform: uppercase;
             font-size: 0.9rem;
             letter-spacing: 1px;
             cursor: pointer;
-            padding: 2px 6px;
-            border-radius: 4px;
-            transition: background 0.3s ease, color 0.3s ease;
+            display: inline-block;
         }
-        .song-part:hover { color: #fff; }
+        .song-part-title:hover { color: #fff; }
 
-        /* Yellow-tinted active highlight */
-        .song-part.active-part {
-            background-color: rgba(250, 204, 21, 0.25);
-            color: var(--highlight-color) !important;
+        /* Yellow-tinted active highlight para sa buong bloke ng kanta */
+        .song-part-block.active-block {
+            background-color: rgba(250, 204, 21, 0.15);
             border-left: 4px solid var(--highlight-color);
-            padding-left: 8px;
+        }
+
+        .song-part-block.active-block .song-part-title {
+            color: var(--highlight-color) !important;
         }
 
         .modal-overlay {
@@ -385,7 +391,6 @@
         </div>
 
         <div id="screen-play" class="screen active">
-            <!-- Standalone output viewport para iwas gulo sa magkaibang screen size -->
             <div id="output" class="output-box">Wala pang nilalagay na chords. I-click ang 'Songs' o 'Line Up' para pumili.</div>
             <div id="floating-quick-bar" class="floating-quick-bar">
                 <span style="font-size: 0.7rem; color: #aaa; align-self: center;">Jump:</span>
@@ -493,7 +498,7 @@
 
         const lineupCategories = ["Opening", "Joyful", "Solemn", "Offering", "Closing", "Others"];
 
-        // --- UNIVERSAL FIREBASE SYNC LISTENER (Focus on Part Name & Commands) ---
+        // --- FIREBASE SYNC LISTENER ---
         window.addEventListener('DOMContentLoaded', () => {
             const liveRef = window.fbRef(window.fbDB, 'live_session');
             window.fbOnValue(liveRef, (snapshot) => {
@@ -513,9 +518,8 @@
                         processText();
                     }
 
-                    // Gamitin ang unibersal na activePart name para i-sync ang posisyon at highlight sa lahat ng uri ng phone
                     if (data.activePartId) {
-                        applyUniversalHighlightAndCenter(data.activePartId);
+                        centerAndHighlightBlock(data.activePartId);
                     }
 
                     setTimeout(() => { isReceivingRemoteUpdate = false; }, 100);
@@ -555,9 +559,6 @@
 
         function transposeNote(chord) {
             let root = chord[0];
-            if (chord.length > 1 && (chord[1] === '#' || chord[1] === 'b')) {
-                root = chord.substring(0, 2);
-            }
             let suffix = chord.substring(root.length);
             let idx = getNoteIndex(root);
             if (idx === -1) return chord;
@@ -581,6 +582,7 @@
             broadcastLiveState();
         }
 
+        // Hinati natin ang mga kanta sa bawat section block para may sarili silang wrapper container
         function processText() {
             const text = document.getElementById('raw-input').value;
             const quickBar = document.getElementById('floating-quick-bar');
@@ -599,6 +601,7 @@
             const partRegex = /^(?:\[(.*?)\]|Intro|Verse\s*\d*|Chorus|Pre-Chorus|Bridge|Outro|Instrumental|Interlude|Refrain|Adlib)\s*[:]?$/i;
 
             let partCounter = 0;
+            let insideBlock = false;
 
             for (let i = 0; i < lines.length; i++) {
                 let line = lines[i];
@@ -607,20 +610,29 @@
                 
                 let matchPart = trimmed.match(partRegex);
                 if (matchPart) {
+                    if (insideBlock) {
+                        htmlOutput += `</div>\n`; // Isara ang naunang block
+                    }
                     let partLabel = matchPart[1] || matchPart[0];
-                    let targetId = `part-${partCounter}`;
+                    let blockId = `block-${partCounter}`;
                     
-                    htmlOutput += `<span id="${targetId}" class="song-part" onclick="triggerSongPart('${targetId}')">${escapedLine}</span>\n`;
+                    htmlOutput += `<div id="${blockId}" class="song-part-block">\n`;
+                    htmlOutput += `<span class="song-part-title" onclick="triggerSongPart('${blockId}')">${escapedLine}</span>\n`;
 
                     let qBtn = document.createElement('button');
                     qBtn.className = 'btn btn-part';
                     qBtn.style.padding = '3px 8px';
                     qBtn.innerText = partLabel;
-                    qBtn.onclick = () => triggerSongPart(targetId);
+                    qBtn.onclick = () => triggerSongPart(blockId);
                     quickBar.appendChild(qBtn);
 
                     partCounter++;
+                    insideBlock = true;
                 } else {
+                    if (!insideBlock) {
+                        htmlOutput += `<div id="block-intro" class="song-part-block">\n`;
+                        insideBlock = true;
+                    }
                     let formattedLine = escapedLine.replace(chordRegex, (match) => {
                         let transposed = match.includes('/') 
                             ? match.split('/').map(c => transposeNote(c)).join('/')
@@ -630,28 +642,41 @@
                     htmlOutput += formattedLine + (i < lines.length - 1 ? '\n' : '');
                 }
             }
+            if (insideBlock) {
+                htmlOutput += `</div>\n`;
+            }
 
             document.getElementById('output').innerHTML = htmlOutput;
             document.getElementById('key-val').innerText = currentSemitones > 0 ? `+${currentSemitones}` : currentSemitones;
         }
 
-        // Universal function para sa stable centering at active highlight sa standalone container
-        function applyUniversalHighlightAndCenter(targetId) {
-            document.querySelectorAll('.song-part').forEach(el => el.classList.remove('active-part'));
+        // Smart Centering batay sa kabuuang taas/laki ng bloke (Line-Count Center Reference)
+        function centerAndHighlightBlock(blockId) {
+            document.querySelectorAll('.song-part-block').forEach(el => el.classList.remove('active-block'));
 
-            const targetEl = document.getElementById(targetId);
+            const targetBlock = document.getElementById(blockId);
             const outputBox = document.getElementById('output');
             
-            if (targetEl && outputBox) {
-                targetEl.classList.add('active-part');
-                // Gamitin ang scrollIntoView sa loob ng standalone output box para pantay sa lahat ng mobile screen
-                targetEl.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+            if (targetBlock && outputBox) {
+                targetBlock.classList.add('active-block');
+                
+                // Kinukuha ang eksaktong gitna ng buong bloke ng kanta para walang ma-cut off sa itaas o ibaba
+                const blockTop = targetBlock.offsetTop;
+                const blockHeight = targetBlock.offsetHeight;
+                const boxHeight = outputBox.clientHeight;
+                
+                const exactCenterScroll = blockTop - (boxHeight / 2) + (blockHeight / 2);
+                
+                outputBox.scrollTo({
+                    top: exactCenterScroll,
+                    behavior: 'smooth'
+                });
             }
         }
 
-        function triggerSongPart(targetId) {
-            applyUniversalHighlightAndCenter(targetId);
-            broadcastLiveState({ activePartId: targetId });
+        function triggerSongPart(blockId) {
+            centerAndHighlightBlock(blockId);
+            broadcastLiveState({ activePartId: blockId });
         }
 
         function transpose(amount) {
