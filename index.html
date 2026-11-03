@@ -15,18 +15,16 @@
         const firebaseConfig = {
             apiKey: "AIzaSyBLXaXG8EcxhGxqZCkFiqzLp9uF7vnYZS0",
             authDomain: "preach-mate.firebaseapp.com",
-            databaseURL: "https://preach-mate-default-rtdb.asia-southeast1.firebasedatabase.app", // Pinalitan para sa RTDB URL kung kinakailangan o default
+            databaseURL: "https://preach-mate-default-rtdb.asia-southeast1.firebasedatabase.app",
             projectId: "preach-mate",
             storageBucket: "preach-mate.firebasestorage.app",
             messagingSenderId: "977514996603",
             appId: "1:977514996603:web:08df66f4761b0795b553de"
         };
 
-        // Initialize Firebase
         const app = initializeApp(firebaseConfig);
         const db = getDatabase(app);
 
-        // I-expose sa global window para magamit ng ating script functions
         window.fbDB = db;
         window.fbRef = ref;
         window.fbSet = set;
@@ -59,8 +57,9 @@
         }
 
         header {
-            position: sticky;
+            position: fixed;
             top: 0;
+            left: 0;
             z-index: 100;
             background: var(--panel-bg);
             border-bottom: 1px solid var(--border-color);
@@ -156,6 +155,7 @@
             overflow: hidden;
             display: flex;
             flex-direction: column;
+            margin-top: 90px; /* Nilagyan ng sapat na margin para hindi matakpan ng fixed header */
         }
 
         .screen {
@@ -191,6 +191,7 @@
             line-height: 1.7;
             white-space: pre-wrap;
             word-break: break-all;
+            -webkit-overflow-scrolling: touch;
         }
 
         .chord { color: var(--chord-color) !important; font-weight: bold !important; }
@@ -306,7 +307,7 @@
     <div id="search-modal" class="modal-overlay" onclick="closeModal('search-modal')">
         <div class="modal-content" onclick="event.stopPropagation()">
             <h3 style="font-size: 1rem; color: #fff;">Load Song from Cloud</h3>
-            <input type="text" id="load-title-input" placeholder="Hanapin ang Pamagat ng Kanta...">
+            <input type="text" id="load-title-input" placeholder="Hanapin ang Pamagat ng Kanta..." oninput="confirmLoadCloud()">
             <div style="display: flex; gap: 8px; width: 100%;">
                 <button class="btn" style="flex:1;" onclick="closeModal('search-modal')">Cancel</button>
                 <button class="btn btn-primary" style="flex:1;" onclick="confirmLoadCloud()">Search</button>
@@ -433,7 +434,7 @@
         function openSearchModal() {
             document.getElementById('search-modal').style.display = 'flex';
             document.getElementById('search-results').innerHTML = '';
-            confirmLoadCloud(); // Auto load list
+            confirmLoadCloud();
         }
 
         async function confirmLoadCloud() {
