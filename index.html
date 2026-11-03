@@ -268,16 +268,17 @@
 
         <div class="header-row-2">
             <button class="btn" onclick="newSong()">New Song</button>
+            <button class="btn btn-personal" onclick="savePersonalManual()">Local Save</button>
             <button class="btn btn-primary" onclick="openMasterSaveModal()">Master Save</button>
             <button class="btn" onclick="openSearchModal()">Load Cloud</button>
-            <button class="btn btn-personal" onclick="loadPersonalListModal()">Local Songs</button>
+            <button class="btn" onclick="loadPersonalListModal()">Local Songs</button>
             <button class="btn" onclick="openQRModal()">QR Share</button>
         </div>
     </header>
 
     <div class="workspace">
         <div id="screen-edit" class="screen">
-            <textarea id="raw-input" placeholder="I-paste ang lyrics at chords dito..." oninput="autoSavePersonal()"></textarea>
+            <textarea id="raw-input" placeholder="I-paste ang lyrics at chords dito..." oninput="autoSaveDraft()"></textarea>
         </div>
 
         <div id="screen-play" class="screen active">
@@ -295,7 +296,7 @@
         </div>
     </div>
 
-    <!-- Master Cloud Save Modal (Passkey Only, No Title Input Needed) -->
+    <!-- Master Cloud Save Modal (Passkey Only - Overwrites current title) -->
     <div id="save-modal" class="modal-overlay" onclick="closeModal('save-modal')">
         <div class="modal-content" onclick="event.stopPropagation()">
             <h3 style="font-size: 1rem; color: #fff;">Save to Master Cloud</h3>
@@ -360,7 +361,6 @@
             let lines = text.split('\n');
             for (let line of lines) {
                 let clean = line.trim();
-                // Kung may nakitang quoted title o unang linya na may laman
                 if (clean.startsWith('"') && clean.endsWith('"')) {
                     return clean.replace(/"/g, '');
                 }
@@ -379,7 +379,6 @@
                 return;
             }
 
-            // Automatic title detection mula sa unang linya ng lyrics
             currentSongTitle = extractTitle(text);
             document.getElementById('app-title-display').innerText = "Band Note - " + currentSongTitle;
 
@@ -444,24 +443,36 @@
             }
         }
 
-        /* --- AUTOMATIC PERSONAL LOCAL STORAGE SAVE --- */
-        function autoSavePersonal() {
+        /* --- MANUAL & AUTO LOCAL STORAGE (Overwrite current title) --- */
+        function savePersonalManual() {
+            const text = document.getElementById('raw-input').value.trim();
+            if (!text) {
+                alert("Walang laman para ma-save sa local storage!");
+                return;
+            }
+            currentSongTitle = extractTitle(text);
+            let personalSongs = JSON.parse(localStorage.getItem('bandnote_personal') || "{}");
+            
+            personalSongs[currentSongTitle] = {
+                title: currentSongTitle,
+                content: text,
+                updatedAt: new Date().toISOString()
+            };
+
+            localStorage.setItem('bandnote_personal', JSON.stringify(personalSongs));
+            alert(`Na-save at na-overwrite ang "${currentSongTitle}" sa Local Storage!`);
+        }
+
+        function autoSaveDraft() {
             const text = document.getElementById('raw-input').value;
             if (text.trim()) {
                 currentSongTitle = extractTitle(text);
                 document.getElementById('app-title-display').innerText = "Band Note - " + currentSongTitle;
-                
-                let personalSongs = JSON.parse(localStorage.getItem('bandnote_personal') || "{}");
-                personalSongs[currentSongTitle] = {
-                    title: currentSongTitle,
-                    content: text,
-                    updatedAt: new Date().toISOString()
-                };
-                localStorage.setItem('bandnote_personal', JSON.stringify(personalSongs));
+                localStorage.setItem('bandnote_draft', text);
             }
         }
 
-        /* --- MASTER CLOUD ACTIONS (Firebase with Passkey Only) --- */
+        /* --- MASTER CLOUD ACTIONS (Firebase - Overwrite current title) --- */
         function openMasterSaveModal() {
             const text = document.getElementById('raw-input').value.trim();
             if (!text) {
@@ -469,7 +480,7 @@
                 return;
             }
             currentSongTitle = extractTitle(text);
-            document.getElementById('master-song-title-label').innerText = "Kanta: " + currentSongTitle;
+            document.getElementById('master-song-title-label').innerText = "I-overwrite ang kanta: " + currentSongTitle;
             document.getElementById('master-passkey-input').value = "";
             document.getElementById('save-modal').style.display = 'flex';
         }
@@ -491,7 +502,7 @@
                     content: text,
                     updatedAt: new Date().toISOString()
                 });
-                alert("Tagumpay na na-save sa Master Cloud database!");
+                alert(`Tagumpay na na-overwrite at na-save sa Master Cloud ang "${currentSongTitle}"!`);
                 closeModal('save-modal');
             } catch (e) {
                 alert("Error sa pag-save sa Cloud: " + e.message);
@@ -594,15 +605,10 @@
             document.getElementById(modalId).style.display = 'none';
         }
 
-        // Auto-load last edited local draft on startup
         window.onload = function() {
-            let personalSongs = JSON.parse(localStorage.getItem('bandnote_personal') || "{}");
-            let keys = Object.keys(personalSongs);
-            if (keys.length > 0) {
-                // Kunin ang huling kinonfigure o inedit
-                let lastSong = personalSongs[keys[keys.length - 1]];
-                document.getElementById('raw-input').value = lastSong.content;
-                currentSongTitle = lastSong.title;
+            let draft = localStorage.getItem('bandnote_draft');
+            if (draft) {
+                document.getElementById('raw-input').value = draft;
                 processText();
             }
         };
