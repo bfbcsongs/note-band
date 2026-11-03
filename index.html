@@ -43,7 +43,6 @@
             --section-color: #38bdf8;
             --accent-color: #3b82f6;
             --accent-hover: #2563eb;
-            --personal-color: #10b981;
             --danger-color: #ef4444;
             --lineup-color: #8b5cf6;
         }
@@ -125,8 +124,6 @@
         .btn:hover { background: #404040; }
         .btn-primary { background: var(--accent-color); border: none; }
         .btn-primary:hover { background: var(--accent-hover); }
-        .btn-personal { background: var(--personal-color); border: none; color: #000; font-weight: 600; }
-        .btn-personal:hover { background: #059669; }
         .btn-danger { background: var(--danger-color); border: none; color: #fff; }
         .btn-danger:hover { background: #dc2626; }
         .btn-lineup { background: var(--lineup-color); border: none; color: #fff; }
@@ -295,10 +292,8 @@
 
         <div class="header-row-2">
             <button class="btn" onclick="newSong()">New Song</button>
-            <button class="btn btn-personal" onclick="savePersonalManual()">Local Save</button>
-            <button class="btn btn-primary" onclick="openMasterSaveModal()">Master Save</button>
-            <button class="btn" onclick="openSearchModal()">Load Cloud</button>
-            <button class="btn" onclick="loadPersonalListModal()">Local Songs</button>
+            <button class="btn btn-primary" onclick="openMasterSaveModal()">Save</button>
+            <button class="btn" onclick="openSearchModal()">Songs</button>
             <button class="btn btn-lineup" onclick="openLineUpModal()">Line Up</button>
             <button class="btn" onclick="openQRModal()">QR Share</button>
         </div>
@@ -306,11 +301,11 @@
 
     <div class="workspace">
         <div id="screen-edit" class="screen">
-            <textarea id="raw-input" placeholder="I-paste ang lyrics at chords dito..." oninput="autoSaveDraft()"></textarea>
+            <textarea id="raw-input" placeholder="I-paste ang lyrics at chords dito..." oninput="processText()"></textarea>
         </div>
 
         <div id="screen-play" class="screen active">
-            <div id="output" class="output-box">Wala pang nilalagay na chords. I-click ang 'Load Cloud' o 'Line Up' para pumili.</div>
+            <div id="output" class="output-box">Wala pang nilalagay na chords. I-click ang 'Songs' o 'Line Up' para pumili.</div>
         </div>
     </div>
 
@@ -351,42 +346,33 @@
         </div>
     </div>
 
-    <!-- Master Cloud Save Modal -->
+    <!-- Save Cloud Modal -->
     <div id="save-modal" class="modal-overlay" onclick="closeModal('save-modal')">
         <div class="modal-content" onclick="event.stopPropagation()">
-            <h3 style="font-size: 1rem; color: #fff;">Save to Master Cloud</h3>
+            <h3 style="font-size: 1rem; color: #fff;">Save Song</h3>
             <p id="master-song-title-label" style="font-size: 0.85rem; color: var(--section-color); font-weight: bold;"></p>
             <input type="password" id="master-passkey-input" placeholder="Ilagay ang Master Passkey...">
             <div style="display: flex; gap: 8px; width: 100%;">
                 <button class="btn" style="flex:1;" onclick="closeModal('save-modal')">Cancel</button>
-                <button class="btn btn-primary" style="flex:1;" onclick="confirmSaveMaster()">Save Master</button>
+                <button class="btn btn-primary" style="flex:1;" onclick="confirmSaveMaster()">Save</button>
             </div>
         </div>
     </div>
 
-    <!-- Load / Search Cloud Modal -->
+    <!-- Songs Modal (Cloud List) -->
     <div id="search-modal" class="modal-overlay" onclick="closeModal('search-modal')">
         <div class="modal-content" onclick="event.stopPropagation()" style="max-width: 440px;">
-            <h3 style="font-size: 1rem; color: #fff;">Cloud Songs (Master)</h3>
+            <h3 style="font-size: 1rem; color: #fff;">Cloud Songs</h3>
             <input type="text" id="load-title-input" placeholder="Hanapin ang Pamagat ng Kanta..." oninput="fetchCloudSongs()">
             <div id="search-results" style="width: 100%; max-height: 240px; overflow-y: auto; text-align: left; font-size: 0.85rem; margin-top: 8px;"></div>
             <button class="btn btn-primary" style="width: 100%; margin-top: 8px;" onclick="closeModal('search-modal')">Close</button>
         </div>
     </div>
 
-    <!-- Local Storage Songs Modal -->
-    <div id="local-list-modal" class="modal-overlay" onclick="closeModal('local-list-modal')">
-        <div class="modal-content" onclick="event.stopPropagation()" style="max-width: 440px;">
-            <h3 style="font-size: 1rem; color: #fff;">Local Saved Songs</h3>
-            <div id="local-results" style="width: 100%; max-height: 240px; overflow-y: auto; text-align: left; font-size: 0.85rem; margin-top: 8px;"></div>
-            <button class="btn btn-primary" style="width: 100%; margin-top: 8px;" onclick="closeModal('local-list-modal')">Close</button>
-        </div>
-    </div>
-
-    <!-- Master Delete Passkey Modal -->
+    <!-- Delete Passkey Modal -->
     <div id="delete-modal" class="modal-overlay" onclick="closeModal('delete-modal')">
         <div class="modal-content" onclick="event.stopPropagation()">
-            <h3 style="font-size: 1rem; color: var(--danger-color);">Delete Cloud Song</h3>
+            <h3 style="font-size: 1rem; color: var(--danger-color);">Delete Song</h3>
             <p id="delete-song-title-label" style="font-size: 0.85rem; color: #fff;"></p>
             <input type="password" id="delete-passkey-input" placeholder="Ilagay ang Master Passkey...">
             <div style="display: flex; gap: 8px; width: 100%;">
@@ -404,7 +390,6 @@
         let songToDeleteKey = null;
         let cachedCloudSongs = {};
         let pendingAssignSong = null;
-        let isNewSongMode = false; // Flag para malaman kung blangko ang sinisimulan
 
         const lineupCategories = ["Opening", "Joyful", "Solemn", "Offering", "Closing", "Others"];
 
@@ -445,7 +430,7 @@
         function processText() {
             const text = document.getElementById('raw-input').value;
             if (!text.trim()) {
-                document.getElementById('output').innerText = "Wala pang nilalagay na chords. I-click ang 'Load Cloud' o 'Line Up' para pumili.";
+                document.getElementById('output').innerText = "Wala pang nilalagay na chords. I-click ang 'Songs' o 'Line Up' para pumili.";
                 document.getElementById('app-title-display').innerText = "Band Note (Untitled)";
                 return;
             }
@@ -500,12 +485,10 @@
 
         function newSong() {
             if (confirm("Gusto mo bang gumawa ng bagong kanta?")) {
-                isNewSongMode = true; // I-activate ang bagong kanta mode para hindi ma-overwrite ang luma habang blangko
                 document.getElementById('raw-input').value = "";
                 currentSongTitle = "Untitled";
                 document.getElementById('app-title-display').innerText = "Band Note (Untitled)";
                 document.getElementById('output').innerText = "Wala pang nilalagay na kanta.";
-                localStorage.removeItem('bandnote_draft'); // Burahin ang dating draft
                 switchScreen('edit');
             }
         }
@@ -542,7 +525,6 @@
         function loadLineUpSong(cat) {
             let lineupData = JSON.parse(localStorage.getItem('bandnote_lineup') || "{}");
             if (lineupData[cat]) {
-                isNewSongMode = false;
                 document.getElementById('raw-input').value = lineupData[cat].content;
                 currentSongTitle = lineupData[cat].title;
                 processText();
@@ -577,108 +559,11 @@
             pendingAssignSong = null;
         }
 
-        /* --- LOCAL STORAGE ACTIONS --- */
-        function savePersonalManual() {
-            const text = document.getElementById('raw-input').value.trim();
-            if (!text) {
-                alert("Walang laman para ma-save sa local storage!");
-                return;
-            }
-            currentSongTitle = extractTitle(text);
-            let personalSongs = JSON.parse(localStorage.getItem('bandnote_personal') || "{}");
-            
-            personalSongs[currentSongTitle] = {
-                title: currentSongTitle,
-                content: text,
-                updatedAt: new Date().toISOString()
-            };
-
-            localStorage.setItem('bandnote_personal', JSON.stringify(personalSongs));
-            isNewSongMode = false;
-            alert(`Na-save at na-overwrite ang "${currentSongTitle}" sa Local Storage!`);
-        }
-
-        function autoSaveDraft() {
-            const text = document.getElementById('raw-input').value;
-            if (text.trim()) {
-                currentSongTitle = extractTitle(text);
-                document.getElementById('app-title-display').innerText = "Band Note - " + currentSongTitle;
-                
-                // Kung nasa New Song mode at may nilagay na, ilagay muna sa draft nang hindi pilit na ine-overwrite ang huling kanta hangga't walang pinindot na Save
-                if (!isNewSongMode) {
-                    localStorage.setItem('bandnote_draft', text);
-                }
-            }
-        }
-
-        function loadPersonalListModal() {
-            const modal = document.getElementById('local-list-modal');
-            const resultsBox = document.getElementById('local-results');
-            resultsBox.innerHTML = "";
-
-            let personalSongs = JSON.parse(localStorage.getItem('bandnote_personal') || "{}");
-            let keys = Object.keys(personalSongs);
-
-            if (keys.length === 0) {
-                resultsBox.innerHTML = "Wala pang naka-save na personal songs sa device na ito.";
-            } else {
-                keys.forEach(title => {
-                    let song = personalSongs[title];
-                    let row = document.createElement('div');
-                    row.className = 'song-row-item';
-                    row.innerHTML = `
-                        <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100px;">📱 ${song.title}</span>
-                        <div style="display: flex; gap: 3px;">
-                            <button class="btn btn-primary" style="padding: 3px 5px; font-size: 0.65rem;" onclick="localActionLoad('${title.replace(/'/g, "\\'")}')">Load</button>
-                            <button class="btn" style="padding: 3px 5px; font-size: 0.65rem;" onclick="localActionEdit('${title.replace(/'/g, "\\'")}')">Edit</button>
-                            <button class="btn btn-lineup" style="padding: 3px 5px; font-size: 0.65rem;" onclick="openAssignModal('${title.replace(/'/g, "\\'")}', '${song.content.replace(/'/g, "\\'")}')">Assign</button>
-                            <button class="btn btn-danger" style="padding: 3px 5px; font-size: 0.65rem;" onclick="localActionDelete('${title.replace(/'/g, "\\'")}')">Del</button>
-                        </div>
-                    `;
-                    resultsBox.appendChild(row);
-                });
-            }
-            modal.style.display = 'flex';
-        }
-
-        function localActionLoad(title) {
-            let personalSongs = JSON.parse(localStorage.getItem('bandnote_personal') || "{}");
-            if (personalSongs[title]) {
-                isNewSongMode = false;
-                document.getElementById('raw-input').value = personalSongs[title].content;
-                currentSongTitle = title;
-                processText();
-                closeModal('local-list-modal');
-                switchScreen('play');
-            }
-        }
-
-        function localActionEdit(title) {
-            let personalSongs = JSON.parse(localStorage.getItem('bandnote_personal') || "{}");
-            if (personalSongs[title]) {
-                isNewSongMode = false;
-                document.getElementById('raw-input').value = personalSongs[title].content;
-                currentSongTitle = title;
-                processText();
-                closeModal('local-list-modal');
-                switchScreen('edit');
-            }
-        }
-
-        function localActionDelete(title) {
-            if (confirm(`Sigurado ka bang gusto mong burahin ang "${title}" sa Local Storage?`)) {
-                let personalSongs = JSON.parse(localStorage.getItem('bandnote_personal') || "{}");
-                delete personalSongs[title];
-                localStorage.setItem('bandnote_personal', JSON.stringify(personalSongs));
-                loadPersonalListModal();
-            }
-        }
-
-        /* --- MASTER CLOUD ACTIONS --- */
+        /* --- CLOUD ACTIONS --- */
         function openMasterSaveModal() {
             const text = document.getElementById('raw-input').value.trim();
             if (!text) {
-                alert("Walang laman ang lyrics/chords para ma-save sa Master Cloud!");
+                alert("Walang laman ang lyrics/chords para ma-save!");
                 return;
             }
             currentSongTitle = extractTitle(text);
@@ -690,7 +575,7 @@
         async function confirmSaveMaster() {
             let passkey = document.getElementById('master-passkey-input').value.trim();
             if (passkey !== "paulm2026") {
-                alert("Mali ang Master Passkey! Hindi ma-save sa Master Cloud.");
+                alert("Mali ang Master Passkey! Hindi ma-save.");
                 return;
             }
 
@@ -703,11 +588,10 @@
                     content: text,
                     updatedAt: new Date().toISOString()
                 });
-                isNewSongMode = false;
-                alert(`Tagumpay na na-overwrite at na-save sa Master Cloud ang "${currentSongTitle}"!`);
+                alert(`Tagumpay na na-save ang "${currentSongTitle}"!`);
                 closeModal('save-modal');
             } catch (e) {
-                alert("Error sa pag-save sa Cloud: " + e.message);
+                alert("Error sa pag-save: " + e.message);
             }
         }
 
@@ -720,7 +604,7 @@
         async function fetchCloudSongs() {
             let query = document.getElementById('load-title-input').value.trim().toLowerCase();
             const resultsBox = document.getElementById('search-results');
-            resultsBox.innerHTML = "Hinahanap sa Cloud...";
+            resultsBox.innerHTML = "Hinahanap ang mga kanta...";
 
             try {
                 const snapshot = await window.fbGet(window.fbChild(window.fbRef(window.fbDB), 'songs'));
@@ -736,7 +620,7 @@
                             let row = document.createElement('div');
                             row.className = 'song-row-item';
                             row.innerHTML = `
-                                <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100px;">☁️ ${song.title}</span>
+                                <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100px;">🎵 ${song.title}</span>
                                 <div style="display: flex; gap: 3px;">
                                     <button class="btn btn-primary" style="padding: 3px 5px; font-size: 0.65rem;" onclick="cloudActionLoad('${key}')">Load</button>
                                     <button class="btn" style="padding: 3px 5px; font-size: 0.65rem;" onclick="cloudActionEdit('${key}')">Edit</button>
@@ -758,7 +642,6 @@
 
         function cloudActionLoad(key) {
             if (cachedCloudSongs[key]) {
-                isNewSongMode = false;
                 document.getElementById('raw-input').value = cachedCloudSongs[key].content;
                 currentSongTitle = cachedCloudSongs[key].title;
                 processText();
@@ -769,7 +652,6 @@
 
         function cloudActionEdit(key) {
             if (cachedCloudSongs[key]) {
-                isNewSongMode = false;
                 document.getElementById('raw-input').value = cachedCloudSongs[key].content;
                 currentSongTitle = cachedCloudSongs[key].title;
                 processText();
@@ -787,7 +669,7 @@
 
         function cloudActionDeleteOpen(key, title) {
             songToDeleteKey = key;
-            document.getElementById('delete-song-title-label').innerText = `Burahin ang "${title}" sa Master Cloud?`;
+            document.getElementById('delete-song-title-label').innerText = `Burahin ang "${title}"?`;
             document.getElementById('delete-passkey-input').value = "";
             document.getElementById('delete-modal').style.display = 'flex';
         }
@@ -801,7 +683,7 @@
 
             try {
                 await window.fbRemove(window.fbRef(window.fbDB, 'songs/' + songToDeleteKey));
-                alert("Matagumpay na nabura ang kanta sa Master Cloud!");
+                alert("Matagumpay na nabura ang kanta!");
                 closeModal('delete-modal');
                 fetchCloudSongs();
             } catch (e) {
@@ -827,16 +709,6 @@
         function closeModal(modalId) {
             document.getElementById(modalId).style.display = 'none';
         }
-
-        window.onload = function() {
-            let draft = localStorage.getItem('bandnote_draft');
-            if (draft) {
-                document.getElementById('raw-input').value = draft;
-                processText();
-            }
-        };
-
-        document.getElementById('raw-input').addEventListener('input', autoSaveDraft);
     </script>
 </body>
 </html>
