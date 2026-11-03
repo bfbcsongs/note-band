@@ -133,7 +133,7 @@
         .btn-lineup:hover { background: #7c3aed; }
         .btn-sync { background: #374151; border: 1px solid #4b5563; }
         .btn-sync.active { background: var(--sync-on); color: #000; font-weight: bold; border: none; }
-        .btn-part { background: #1e293b; color: #38bdf8; border: 1px solid #334155; font-size: 0.7rem; padding: 4px 8px; }
+        .btn-part { background: #1e293b; color: #38bdf8; border: 1px solid #334155; font-size: 0.75rem; padding: 5px 10px; }
         .btn-part:hover { background: #334155; }
 
         .trans-badge {
@@ -182,22 +182,24 @@
 
         .screen.active { display: flex; }
 
-        .edit-container {
-            display: flex;
-            flex-direction: column;
-            height: 100%;
-            padding: 10px;
-            gap: 8px;
-        }
-
-        .part-toolbar {
-            display: flex;
-            gap: 4px;
+        /* Floating Selection Menu na lilitaw kapag nag-highlight sa edit mode */
+        .selection-popup {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #1e1e1e;
+            border: 1px solid var(--accent-color);
+            padding: 8px 12px;
+            border-radius: 8px;
+            display: none;
+            gap: 6px;
             overflow-x: auto;
-            padding-bottom: 4px;
-            background: #111;
-            border-bottom: 1px solid var(--border-color);
+            max-width: 95%;
+            z-index: 200;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.8);
         }
+        .selection-popup::-webkit-scrollbar { display: none; }
 
         textarea {
             flex: 1;
@@ -205,7 +207,7 @@
             background: transparent;
             color: var(--text-primary);
             border: none;
-            padding: 10px;
+            padding: 16px;
             font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace;
             font-size: 0.95rem;
             line-height: 1.6;
@@ -217,7 +219,7 @@
         .output-box {
             flex: 1;
             padding: 16px;
-            padding-bottom: 70px; /* Dagdag space para sa floating bar */
+            padding-bottom: 70px;
             overflow-y: auto;
             font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace;
             font-size: 0.95rem;
@@ -227,7 +229,6 @@
             -webkit-overflow-scrolling: touch;
         }
 
-        /* Floating Quick-Jump Bar sa Live/Play Mode */
         .floating-quick-bar {
             position: absolute;
             bottom: 12px;
@@ -350,31 +351,29 @@
     </header>
 
     <div class="workspace">
-        <!-- Edit Mode na may Song Part Toolbar -->
+        <!-- Edit Mode na may Text Selection Popup -->
         <div id="screen-edit" class="screen">
-            <div class="edit-container">
-                <div class="part-toolbar">
-                    <span style="font-size: 0.75rem; color: #888; align-self: center; margin-right: 4px;">Insert Part:</span>
-                    <button class="btn btn-part" onclick="insertSongPart('INTRO')">[Intro]</button>
-                    <button class="btn btn-part" onclick="insertSongPart('VERSE 1')">[Verse 1]</button>
-                    <button class="btn btn-part" onclick="insertSongPart('VERSE 2')">[Verse 2]</button>
-                    <button class="btn btn-part" onclick="insertSongPart('CHORUS')">[Chorus]</button>
-                    <button class="btn btn-part" onclick="insertSongPart('BRIDGE')">[Bridge]</button>
-                    <button class="btn btn-part" onclick="insertSongPart('REFRAIN')">[Refrain]</button>
-                    <button class="btn btn-part" onclick="insertSongPart('ADLIB')">[Adlib]</button>
-                    <button class="btn btn-part" onclick="insertSongPart('OUTRO')">[Outro]</button>
-                </div>
-                <textarea id="raw-input" placeholder="I-type o i-paste ang lyrics at chords dito..." oninput="processText()"></textarea>
+            <textarea id="raw-input" placeholder="I-type o i-paste ang lyrics at chords dito..." oninput="processText()" onmouseup="checkTextSelection()" ontouchend="checkTextSelection()"></textarea>
+            
+            <!-- Floating popup na lilitaw kapag nag-highlight ng text -->
+            <div id="selection-popup" class="selection-popup">
+                <span style="font-size: 0.75rem; color: #aaa; align-self: center;">Assign Part:</span>
+                <button class="btn btn-part" onclick="applySongPart('INTRO')">Intro</button>
+                <button class="btn btn-part" onclick="applySongPart('VERSE 1')">Verse 1</button>
+                <button class="btn btn-part" onclick="applySongPart('VERSE 2')">Verse 2</button>
+                <button class="btn btn-part" onclick="applySongPart('CHORUS')">Chorus</button>
+                <button class="btn btn-part" onclick="applySongPart('BRIDGE')">Bridge</button>
+                <button class="btn btn-part" onclick="applySongPart('REFRAIN')">Refrain</button>
+                <button class="btn btn-part" onclick="applySongPart('ADLIB')">Adlib</button>
+                <button class="btn btn-part" onclick="applySongPart('OUTRO')">Outro</button>
             </div>
         </div>
 
         <!-- Play / Live Mode na may Floating Quick-Jump Bar -->
         <div id="screen-play" class="screen active">
             <div id="output" class="output-box" onscroll="handleScrollSync()">Wala pang nilalagay na chords. I-click ang 'Songs' o 'Line Up' para pumili.</div>
-            <!-- Floating Quick-Jump Bar -->
             <div id="floating-quick-bar" class="floating-quick-bar">
                 <span style="font-size: 0.7rem; color: #aaa; align-self: center;">Jump:</span>
-                <!-- Dynamic ilalagay dito ang mga quick jump buttons batay sa kanta -->
             </div>
         </div>
     </div>
@@ -561,25 +560,39 @@
             return notesSharp[newIdx] + suffix;
         }
 
-        // Mag-insert ng Song Part sa Edit Mode kung saan nakaposisyon ang cursor
-        function insertSongPart(partName) {
+        // Tinitingnan kung may hinighlight na text sa editor para lumitaw ang popup
+        function checkTextSelection() {
+            const textarea = document.getElementById('raw-input');
+            const popup = document.getElementById('selection-popup');
+            const selectedText = textarea.value.substring(textarea.selectionStart, textarea.selectionEnd).trim();
+
+            if (selectedText.length > 0) {
+                popup.style.display = 'flex';
+            } else {
+                popup.style.display = 'none';
+            }
+        }
+
+        // Nilalagyan ng bracket `[Part]` ang hinighlight na text
+        function applySongPart(partName) {
             const textarea = document.getElementById('raw-input');
             const start = textarea.selectionStart;
             const end = textarea.selectionEnd;
             const text = textarea.value;
+            const selectedText = text.substring(start, end);
+
+            const replacement = `\n[${partName}]\n${selectedText}\n`;
+            textarea.value = text.substring(0, start) + replacement + text.substring(end);
             
-            const insertion = `\n[${partName}]\n`;
-            textarea.value = text.substring(0, start) + insertion + text.substring(end);
-            textarea.selectionStart = textarea.selectionEnd = start + insertion.length;
-            textarea.focus();
+            document.getElementById('selection-popup').style.display = 'none';
             processText();
+            broadcastLiveState();
         }
 
         function processText() {
             const text = document.getElementById('raw-input').value;
             const quickBar = document.getElementById('floating-quick-bar');
             
-            // Panatilihin ang Jump label
             quickBar.innerHTML = '<span style="font-size: 0.7rem; color: #aaa; align-self: center;">Jump:</span>';
 
             if (!text.trim()) {
@@ -591,7 +604,6 @@
             const lines = text.split('\n');
             let htmlOutput = '';
             const chordRegex = /\b([A-G][#b]?(?:m|maj|min|dim|aug|sus|7|9|11|13)?(?:\/[A-G][#b]?)?)\b/g;
-            // Kinikilala ang mga bracketed parts o standard parts tulad ng [VERSE 1], INTRO, CHORUS, atbp.
             const partRegex = /^(?:\[(.*?)\]|Intro|Verse\s*\d*|Chorus|Pre-Chorus|Bridge|Outro|Instrumental|Interlude|Refrain|Adlib)\s*[:]?$/i;
 
             let partCounter = 0;
@@ -606,10 +618,8 @@
                     let partLabel = matchPart[1] || matchPart[0];
                     let targetId = `part-item-${partCounter}`;
                     
-                    // Idagdag ang HTML tag na may ID para sa pag-scroll
                     htmlOutput += `<span id="${targetId}" class="song-part">${escapedLine}</span>\n`;
 
-                    // Gumawa ng Floating Quick-Jump Button para sa part na ito
                     let qBtn = document.createElement('button');
                     qBtn.className = 'btn btn-part';
                     qBtn.style.padding = '3px 8px';
@@ -633,7 +643,6 @@
             document.getElementById('key-val').innerText = currentSemitones > 0 ? `+${currentSemitones}` : currentSemitones;
         }
 
-        // Function para i-auto position / i-scroll sa gitna ang part kapag pinindot ang floating button
         function jumpToSongPart(targetId) {
             const targetEl = document.getElementById(targetId);
             const outputBox = document.getElementById('output');
@@ -665,6 +674,7 @@
                 editScreen.classList.add('active');
                 playScreen.classList.remove('active');
                 toggleBtn.innerText = "Play";
+                document.getElementById('selection-popup').style.display = 'none';
             }
         }
 
@@ -918,7 +928,7 @@
                 closeModal('delete-modal');
                 fetchCloudSongs();
             } catch (e) {
-                alert("Error sa pagbura: " + e.message.toString());
+                alert("Error sa pagbura: " + e.message);
             }
         }
 
