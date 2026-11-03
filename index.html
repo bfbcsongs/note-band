@@ -45,6 +45,7 @@
             --accent-hover: #2563eb;
             --personal-color: #10b981;
             --danger-color: #ef4444;
+            --lineup-color: #8b5cf6;
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -128,6 +129,8 @@
         .btn-personal:hover { background: #059669; }
         .btn-danger { background: var(--danger-color); border: none; color: #fff; }
         .btn-danger:hover { background: #dc2626; }
+        .btn-lineup { background: var(--lineup-color); border: none; color: #fff; }
+        .btn-lineup:hover { background: #7c3aed; }
 
         .trans-badge {
             display: flex;
@@ -228,7 +231,7 @@
             padding: 20px;
             border-radius: 8px;
             text-align: center;
-            max-width: 360px;
+            max-width: 380px;
             width: 90%;
             display: flex;
             flex-direction: column;
@@ -254,6 +257,19 @@
             padding: 8px 10px;
             border-bottom: 1px solid #262626;
             gap: 8px;
+            width: 100%;
+        }
+
+        .lineup-item-box {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #1f1f1f;
+            padding: 8px 12px;
+            border-radius: 6px;
+            border: 1px solid var(--border-color);
+            width: 100%;
+            margin-bottom: 6px;
         }
 
         #qrcode {
@@ -283,6 +299,7 @@
             <button class="btn btn-primary" onclick="openMasterSaveModal()">Master Save</button>
             <button class="btn" onclick="openSearchModal()">Load Cloud</button>
             <button class="btn" onclick="loadPersonalListModal()">Local Songs</button>
+            <button class="btn btn-lineup" onclick="openLineUpModal()">Line Up</button>
             <button class="btn" onclick="openQRModal()">QR Share</button>
         </div>
     </header>
@@ -293,7 +310,28 @@
         </div>
 
         <div id="screen-play" class="screen active">
-            <div id="output" class="output-box">Wala pang nilalagay na kanta. I-click ang 'Load Cloud' o 'Local Songs' para pumili ng kanta.</div>
+            <div id="output" class="output-box">Wala pang nilalagay na kanta. I-click ang 'Load Cloud' o 'Line Up' para pumili.</div>
+        </div>
+    </div>
+
+    <!-- Line Up Modal -->
+    <div id="lineup-modal" class="modal-overlay" onclick="closeModal('lineup-modal')">
+        <div class="modal-content" onclick="event.stopPropagation()" style="max-width: 420px;">
+            <h3 style="font-size: 1rem; color: var(--lineup-color);">Service Line Up</h3>
+            <div id="lineup-categories-container" style="width: 100%; max-height: 320px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; text-align: left;">
+                <!-- Dinamikong ilalagay dito ang Opening, Joyful, Solemn, Offering, Closing, Others -->
+            </div>
+            <button class="btn btn-primary" style="width: 100%; margin-top: 4px;" onclick="closeModal('lineup-modal')">Close</button>
+        </div>
+    </div>
+
+    <!-- Select Song for LineUp Category Modal -->
+    <div id="lineup-picker-modal" class="modal-overlay" onclick="closeModal('lineup-picker-modal')">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <h3 id="picker-title" style="font-size: 1rem; color: var(--section-color);">Pumili ng Kanta</h3>
+            <input type="text" id="picker-search-input" placeholder="Hanapin ang kanta..." oninput="renderPickerList()">
+            <div id="picker-results" style="width: 100%; max-height: 200px; overflow-y: auto; text-align: left; font-size: 0.85rem; margin-top: 4px;"></div>
+            <button class="btn" style="width: 100%;" onclick="closeModal('lineup-picker-modal')">Cancel</button>
         </div>
     </div>
 
@@ -324,7 +362,7 @@
     <div id="search-modal" class="modal-overlay" onclick="closeModal('search-modal')">
         <div class="modal-content" onclick="event.stopPropagation()">
             <h3 style="font-size: 1rem; color: #fff;">Cloud Songs (Master)</h3>
-            <input type="text" id="load-title-input" placeholder="Hanapin ang Pamagat ng Kanta..." oninput="confirmLoadCloud()">
+            <input type="text" id="load-title-input" placeholder="Hanapin ang Pamagat ng Kanta..." oninput="fetchCloudSongs()">
             <div id="search-results" style="width: 100%; max-height: 220px; overflow-y: auto; text-align: left; font-size: 0.85rem; margin-top: 8px;"></div>
             <button class="btn btn-primary" style="width: 100%; margin-top: 8px;" onclick="closeModal('search-modal')">Close</button>
         </div>
@@ -358,6 +396,10 @@
         let currentSemitones = 0;
         let currentSongTitle = "Untitled";
         let songToDeleteKey = null;
+        let cachedCloudSongs = {};
+        let activeLineUpCategory = null;
+
+        const lineupCategories = ["Opening", "Joyful", "Solemn", "Offering", "Closing", "Others"];
 
         function getNoteIndex(note) {
             let idx = notesSharp.indexOf(note);
@@ -396,7 +438,7 @@
         function processText() {
             const text = document.getElementById('raw-input').value;
             if (!text.trim()) {
-                document.getElementById('output').innerText = "Wala pang nilalagay na chords. I-click ang 'Load Cloud' o 'Local Songs' para pumili.";
+                document.getElementById('output').innerText = "Wala pang nilalagay na chords. I-click ang 'Load Cloud' o 'Line Up' para pumili.";
                 document.getElementById('app-title-display').innerText = "Band Note (Untitled)";
                 return;
             }
@@ -459,6 +501,122 @@
             }
         }
 
+        /* --- LINE UP FEATURE --- */
+        function openLineUpModal() {
+            renderLineUpCategories();
+            document.getElementById('lineup-modal').style.display = 'flex';
+        }
+
+        function renderLineUpCategories() {
+            const container = document.getElementById('lineup-categories-container');
+            container.innerHTML = "";
+            let lineupData = JSON.parse(localStorage.getItem('bandnote_lineup') || "{}");
+
+            lineupCategories.forEach(cat => {
+                let assignedSong = lineupData[cat] ? lineupData[cat].title : "Walang kanta";
+                let row = document.createElement('div');
+                row.className = 'lineup-item-box';
+                row.innerHTML = `
+                    <div>
+                        <strong style="color: var(--section-color); font-size: 0.8rem; display: block; text-transform: uppercase;">${cat}</strong>
+                        <span style="font-size: 0.85rem; color: #fff;">🎵 ${assignedSong}</span>
+                    </div>
+                    <div style="display: flex; gap: 4px;">
+                        ${lineupData[cat] ? `<button class="btn btn-primary" style="padding: 3px 6px; font-size: 0.7rem;" onclick="loadLineUpSong('${cat}')">Load</button>` : ''}
+                        <button class="btn btn-personal" style="padding: 3px 6px; font-size: 0.7rem;" onclick="openLineUpPicker('${cat}')">Select</button>
+                        ${lineupData[cat] ? `<button class="btn btn-danger" style="padding: 3px 6px; font-size: 0.7rem;" onclick="clearLineUpCategory('${cat}')">Clear</button>` : ''}
+                    </div>
+                `;
+                container.appendChild(row);
+            });
+        }
+
+        function loadLineUpSong(cat) {
+            let lineupData = JSON.parse(localStorage.getItem('bandnote_lineup') || "{}");
+            if (lineupData[cat]) {
+                document.getElementById('raw-input').value = lineupData[cat].content;
+                currentSongTitle = lineupData[cat].title;
+                processText();
+                closeModal('lineup-modal');
+                switchScreen('play');
+            }
+        }
+
+        function clearLineUpCategory(cat) {
+            let lineupData = JSON.parse(localStorage.getItem('bandnote_lineup') || "{}");
+            delete lineupData[cat];
+            localStorage.setItem('bandnote_lineup', JSON.stringify(lineupData));
+            renderLineUpCategories();
+        }
+
+        function openLineUpPicker(cat) {
+            activeLineUpCategory = cat;
+            document.getElementById('picker-title').innerText = `Pumili para sa: ${cat}`;
+            document.getElementById('picker-search-input').value = "";
+            renderPickerList();
+            document.getElementById('lineup-picker-modal').style.display = 'flex';
+        }
+
+        async function renderPickerList() {
+            const query = document.getElementById('picker-search-input').value.toLowerCase();
+            const resultsBox = document.getElementById('picker-results');
+            resultsBox.innerHTML = "Kinukuha ang mga kanta...";
+
+            let combinedSongs = {};
+
+            // 1. Kunin ang Local Songs
+            let localSongs = JSON.parse(localStorage.getItem('bandnote_personal') || "{}");
+            for (let t in localSongs) {
+                combinedSongs[t] = { title: t, content: localSongs[t].content, source: '📱' };
+            }
+
+            // 2. Kunin ang Cloud Songs kung naka-cache na o fetch
+            try {
+                const snapshot = await window.fbGet(window.fbChild(window.fbRef(window.fbDB), 'songs'));
+                if (snapshot.exists()) {
+                    const data = snapshot.val();
+                    for (let key in data) {
+                        let s = data[key];
+                        combinedSongs[s.title] = { title: s.title, content: s.content, source: '☁️' };
+                    }
+                }
+            } catch (e) {
+                console.error(e);
+            }
+
+            resultsBox.innerHTML = "";
+            let found = false;
+
+            for (let title in combinedSongs) {
+                let song = combinedSongs[title];
+                if (title.toLowerCase().includes(query) || query === "") {
+                    found = true;
+                    let item = document.createElement('div');
+                    item.className = 'song-row-item';
+                    item.innerHTML = `
+                        <span>${song.source} <strong>${song.title}</strong></span>
+                        <button class="btn btn-primary" style="padding: 3px 8px; font-size: 0.75rem;" onclick="assignToLineUp('${song.title.replace(/'/g, "\\'")}', '${song.content.replace(/'/g, "\\'")}')">Assign</button>
+                    `;
+                    resultsBox.appendChild(item);
+                }
+            }
+
+            if (!found) {
+                resultsBox.innerHTML = "Walang nahanap na kanta.";
+            }
+        }
+
+        function assignToLineUp(title, content) {
+            let lineupData = JSON.parse(localStorage.getItem('bandnote_lineup') || "{}");
+            lineupData[activeLineUpCategory] = {
+                title: title,
+                content: content
+            };
+            localStorage.setItem('bandnote_lineup', JSON.stringify(lineupData));
+            closeModal('lineup-picker-modal');
+            renderLineUpCategories();
+        }
+
         /* --- LOCAL STORAGE ACTIONS --- */
         function savePersonalManual() {
             const text = document.getElementById('raw-input').value.trim();
@@ -506,9 +664,9 @@
                     row.innerHTML = `
                         <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 130px;">📱 ${song.title}</span>
                         <div style="display: flex; gap: 4px;">
-                            <button class="btn btn-primary" style="padding: 3px 6px; font-size: 0.7rem;" onclick="localActionLoad('${title}')">Load</button>
-                            <button class="btn" style="padding: 3px 6px; font-size: 0.7rem;" onclick="localActionEdit('${title}')">Edit</button>
-                            <button class="btn btn-danger" style="padding: 3px 6px; font-size: 0.7rem;" onclick="localActionDelete('${title}')">Del</button>
+                            <button class="btn btn-primary" style="padding: 3px 6px; font-size: 0.7rem;" onclick="localActionLoad('${title.replace(/'/g, "\\'")}')">Load</button>
+                            <button class="btn" style="padding: 3px 6px; font-size: 0.7rem;" onclick="localActionEdit('${title.replace(/'/g, "\\'")}')">Edit</button>
+                            <button class="btn btn-danger" style="padding: 3px 6px; font-size: 0.7rem;" onclick="localActionDelete('${title.replace(/'/g, "\\'")}')">Del</button>
                         </div>
                     `;
                     resultsBox.appendChild(row);
@@ -544,11 +702,11 @@
                 let personalSongs = JSON.parse(localStorage.getItem('bandnote_personal') || "{}");
                 delete personalSongs[title];
                 localStorage.setItem('bandnote_personal', JSON.stringify(personalSongs));
-                loadPersonalListModal(); // Refresh list
+                loadPersonalListModal();
             }
         }
 
-        /* --- MASTER CLOUD ACTIONS (Firebase) --- */
+        /* --- MASTER CLOUD ACTIONS (Inayos ang Load at Edit) --- */
         function openMasterSaveModal() {
             const text = document.getElementById('raw-input').value.trim();
             if (!text) {
@@ -587,10 +745,10 @@
         function openSearchModal() {
             document.getElementById('search-modal').style.display = 'flex';
             document.getElementById('search-results').innerHTML = '';
-            confirmLoadCloud();
+            fetchCloudSongs();
         }
 
-        async function confirmLoadCloud() {
+        async function fetchCloudSongs() {
             let query = document.getElementById('load-title-input').value.trim().toLowerCase();
             const resultsBox = document.getElementById('search-results');
             resultsBox.innerHTML = "Hinahanap sa Cloud...";
@@ -599,11 +757,11 @@
                 const snapshot = await window.fbGet(window.fbChild(window.fbRef(window.fbDB), 'songs'));
                 if (snapshot.exists()) {
                     resultsBox.innerHTML = '';
-                    const data = snapshot.val();
+                    cachedCloudSongs = snapshot.val();
                     let found = false;
 
-                    for (let key in data) {
-                        let song = data[key];
+                    for (let key in cachedCloudSongs) {
+                        let song = cachedCloudSongs[key];
                         if (song.title.toLowerCase().includes(query) || query === "") {
                             found = true;
                             let row = document.createElement('div');
@@ -611,9 +769,9 @@
                             row.innerHTML = `
                                 <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 130px;">☁️ ${song.title}</span>
                                 <div style="display: flex; gap: 4px;">
-                                    <button class="btn btn-primary" style="padding: 3px 6px; font-size: 0.7rem;" onclick="cloudActionLoad('${song.content.replace(/'/g, "\\'")}', '${song.title}')">Load</button>
-                                    <button class="btn" style="padding: 3px 6px; font-size: 0.7rem;" onclick="cloudActionEdit('${song.content.replace(/'/g, "\\'")}', '${song.title}')">Edit</button>
-                                    <button class="btn btn-danger" style="padding: 3px 6px; font-size: 0.7rem;" onclick="cloudActionDeleteOpen('${key}', '${song.title}')">Del</button>
+                                    <button class="btn btn-primary" style="padding: 3px 6px; font-size: 0.7rem;" onclick="cloudActionLoad('${key}')">Load</button>
+                                    <button class="btn" style="padding: 3px 6px; font-size: 0.7rem;" onclick="cloudActionEdit('${key}')">Edit</button>
+                                    <button class="btn btn-danger" style="padding: 3px 6px; font-size: 0.7rem;" onclick="cloudActionDeleteOpen('${key}', '${song.title.replace(/'/g, "\\'")}')">Del</button>
                                 </div>
                             `;
                             resultsBox.appendChild(row);
@@ -628,20 +786,24 @@
             }
         }
 
-        function cloudActionLoad(content, title) {
-            document.getElementById('raw-input').value = content;
-            currentSongTitle = title;
-            processText();
-            closeModal('search-modal');
-            switchScreen('play');
+        function cloudActionLoad(key) {
+            if (cachedCloudSongs[key]) {
+                document.getElementById('raw-input').value = cachedCloudSongs[key].content;
+                currentSongTitle = cachedCloudSongs[key].title;
+                processText();
+                closeModal('search-modal');
+                switchScreen('play');
+            }
         }
 
-        function cloudActionEdit(content, title) {
-            document.getElementById('raw-input').value = content;
-            currentSongTitle = title;
-            processText();
-            closeModal('search-modal');
-            switchScreen('edit');
+        function cloudActionEdit(key) {
+            if (cachedCloudSongs[key]) {
+                document.getElementById('raw-input').value = cachedCloudSongs[key].content;
+                currentSongTitle = cachedCloudSongs[key].title;
+                processText();
+                closeModal('search-modal');
+                switchScreen('edit');
+            }
         }
 
         function cloudActionDeleteOpen(key, title) {
@@ -662,7 +824,7 @@
                 await window.fbRemove(window.fbRef(window.fbDB, 'songs/' + songToDeleteKey));
                 alert("Matagumpay na nabura ang kanta sa Master Cloud!");
                 closeModal('delete-modal');
-                confirmLoadCloud(); // Refresh list
+                fetchCloudSongs();
             } catch (e) {
                 alert("Error sa pagbura: " + e.message);
             }
