@@ -10,7 +10,7 @@
     <!-- Firebase App (Modular CDN v10) -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getDatabase, ref, set, get, child } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+        import { getDatabase, ref, set, get, child, remove } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyBLXaXG8EcxhGxqZCkFiqzLp9uF7vnYZS0",
@@ -30,6 +30,7 @@
         window.fbSet = set;
         window.fbGet = get;
         window.fbChild = child;
+        window.fbRemove = remove;
     </script>
 
     <style>
@@ -43,6 +44,7 @@
             --accent-color: #3b82f6;
             --accent-hover: #2563eb;
             --personal-color: #10b981;
+            --danger-color: #ef4444;
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -124,6 +126,8 @@
         .btn-primary:hover { background: var(--accent-hover); }
         .btn-personal { background: var(--personal-color); border: none; color: #000; font-weight: 600; }
         .btn-personal:hover { background: #059669; }
+        .btn-danger { background: var(--danger-color); border: none; color: #fff; }
+        .btn-danger:hover { background: #dc2626; }
 
         .trans-badge {
             display: flex;
@@ -224,8 +228,8 @@
             padding: 20px;
             border-radius: 8px;
             text-align: center;
-            max-width: 320px;
-            width: 85%;
+            max-width: 360px;
+            width: 90%;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -241,6 +245,15 @@
             border-radius: 4px;
             font-size: 0.9rem;
             outline: none;
+        }
+
+        .song-row-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 10px;
+            border-bottom: 1px solid #262626;
+            gap: 8px;
         }
 
         #qrcode {
@@ -261,8 +274,6 @@
                     <button onclick="transpose(-1)">-</button>
                     <button onclick="transpose(1)">+</button>
                 </div>
-                <button id="btn-play" class="btn btn-primary" onclick="switchMode('play')">Play</button>
-                <button id="btn-edit" class="btn" onclick="switchMode('edit')">Edit</button>
             </div>
         </div>
 
@@ -282,7 +293,7 @@
         </div>
 
         <div id="screen-play" class="screen active">
-            <div id="output" class="output-box">Wala pang nilalagay na kanta. I-click ang 'Edit' para maglagay o i-load mula sa Cloud/Local.</div>
+            <div id="output" class="output-box">Wala pang nilalagay na kanta. I-click ang 'Load Cloud' o 'Local Songs' para pumili ng kanta.</div>
         </div>
     </div>
 
@@ -296,7 +307,7 @@
         </div>
     </div>
 
-    <!-- Master Cloud Save Modal (Passkey Only - Overwrites current title) -->
+    <!-- Master Cloud Save Modal -->
     <div id="save-modal" class="modal-overlay" onclick="closeModal('save-modal')">
         <div class="modal-content" onclick="event.stopPropagation()">
             <h3 style="font-size: 1rem; color: #fff;">Save to Master Cloud</h3>
@@ -312,22 +323,32 @@
     <!-- Load / Search Cloud Modal -->
     <div id="search-modal" class="modal-overlay" onclick="closeModal('search-modal')">
         <div class="modal-content" onclick="event.stopPropagation()">
-            <h3 style="font-size: 1rem; color: #fff;">Load Song from Cloud</h3>
+            <h3 style="font-size: 1rem; color: #fff;">Cloud Songs (Master)</h3>
             <input type="text" id="load-title-input" placeholder="Hanapin ang Pamagat ng Kanta..." oninput="confirmLoadCloud()">
-            <div style="display: flex; gap: 8px; width: 100%;">
-                <button class="btn" style="flex:1;" onclick="closeModal('search-modal')">Cancel</button>
-                <button class="btn btn-primary" style="flex:1;" onclick="confirmLoadCloud()">Search</button>
-            </div>
-            <div id="search-results" style="width: 100%; max-height: 150px; overflow-y: auto; text-align: left; font-size: 0.85rem; margin-top: 8px;"></div>
+            <div id="search-results" style="width: 100%; max-height: 220px; overflow-y: auto; text-align: left; font-size: 0.85rem; margin-top: 8px;"></div>
+            <button class="btn btn-primary" style="width: 100%; margin-top: 8px;" onclick="closeModal('search-modal')">Close</button>
         </div>
     </div>
 
     <!-- Local Storage Songs Modal -->
     <div id="local-list-modal" class="modal-overlay" onclick="closeModal('local-list-modal')">
         <div class="modal-content" onclick="event.stopPropagation()">
-            <h3 style="font-size: 1rem; color: #fff;">My Personal Saved Songs</h3>
-            <div id="local-results" style="width: 100%; max-height: 180px; overflow-y: auto; text-align: left; font-size: 0.85rem; margin-top: 8px;"></div>
+            <h3 style="font-size: 1rem; color: #fff;">Local Saved Songs</h3>
+            <div id="local-results" style="width: 100%; max-height: 220px; overflow-y: auto; text-align: left; font-size: 0.85rem; margin-top: 8px;"></div>
             <button class="btn btn-primary" style="width: 100%; margin-top: 8px;" onclick="closeModal('local-list-modal')">Close</button>
+        </div>
+    </div>
+
+    <!-- Master Delete Passkey Modal -->
+    <div id="delete-modal" class="modal-overlay" onclick="closeModal('delete-modal')">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <h3 style="font-size: 1rem; color: var(--danger-color);">Delete Cloud Song</h3>
+            <p id="delete-song-title-label" style="font-size: 0.85rem; color: #fff;"></p>
+            <input type="password" id="delete-passkey-input" placeholder="Ilagay ang Master Passkey...">
+            <div style="display: flex; gap: 8px; width: 100%;">
+                <button class="btn" style="flex:1;" onclick="closeModal('delete-modal')">Cancel</button>
+                <button class="btn btn-danger" style="flex:1;" onclick="confirmDeleteCloud()">Delete</button>
+            </div>
         </div>
     </div>
 
@@ -336,6 +357,7 @@
         const notesFlat = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
         let currentSemitones = 0;
         let currentSongTitle = "Untitled";
+        let songToDeleteKey = null;
 
         function getNoteIndex(note) {
             let idx = notesSharp.indexOf(note);
@@ -374,7 +396,7 @@
         function processText() {
             const text = document.getElementById('raw-input').value;
             if (!text.trim()) {
-                document.getElementById('output').innerText = "Wala pang nilalagay na chords. I-click ang 'Edit' para maglagay.";
+                document.getElementById('output').innerText = "Wala pang nilalagay na chords. I-click ang 'Load Cloud' o 'Local Songs' para pumili.";
                 document.getElementById('app-title-display').innerText = "Band Note (Untitled)";
                 return;
             }
@@ -413,37 +435,31 @@
             processText();
         }
 
-        function switchMode(mode) {
+        function switchScreen(screenName) {
             const editScreen = document.getElementById('screen-edit');
             const playScreen = document.getElementById('screen-play');
-            const btnEdit = document.getElementById('btn-edit');
-            const btnPlay = document.getElementById('btn-play');
 
-            if (mode === 'edit') {
+            if (screenName === 'edit') {
                 editScreen.classList.add('active');
                 playScreen.classList.remove('active');
-                btnEdit.classList.add('btn-primary');
-                btnPlay.classList.remove('btn-primary');
             } else {
                 processText();
                 editScreen.classList.remove('active');
                 playScreen.classList.add('active');
-                btnPlay.classList.add('btn-primary');
-                btnEdit.classList.remove('btn-primary');
             }
         }
 
         function newSong() {
-            if (confirm("Gusto mo bang gumawa ng bagong kanta? Masasara ang kasalukuyang draft.")) {
+            if (confirm("Gusto mo bang gumawa ng bagong kanta?")) {
                 document.getElementById('raw-input').value = "";
                 currentSongTitle = "Untitled";
                 document.getElementById('app-title-display').innerText = "Band Note (Untitled)";
                 document.getElementById('output').innerText = "Wala pang nilalagay na kanta.";
-                switchMode('edit');
+                switchScreen('edit');
             }
         }
 
-        /* --- MANUAL & AUTO LOCAL STORAGE (Overwrite current title) --- */
+        /* --- LOCAL STORAGE ACTIONS --- */
         function savePersonalManual() {
             const text = document.getElementById('raw-input').value.trim();
             if (!text) {
@@ -472,7 +488,67 @@
             }
         }
 
-        /* --- MASTER CLOUD ACTIONS (Firebase - Overwrite current title) --- */
+        function loadPersonalListModal() {
+            const modal = document.getElementById('local-list-modal');
+            const resultsBox = document.getElementById('local-results');
+            resultsBox.innerHTML = "";
+
+            let personalSongs = JSON.parse(localStorage.getItem('bandnote_personal') || "{}");
+            let keys = Object.keys(personalSongs);
+
+            if (keys.length === 0) {
+                resultsBox.innerHTML = "Wala pang naka-save na personal songs sa device na ito.";
+            } else {
+                keys.forEach(title => {
+                    let song = personalSongs[title];
+                    let row = document.createElement('div');
+                    row.className = 'song-row-item';
+                    row.innerHTML = `
+                        <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 130px;">📱 ${song.title}</span>
+                        <div style="display: flex; gap: 4px;">
+                            <button class="btn btn-primary" style="padding: 3px 6px; font-size: 0.7rem;" onclick="localActionLoad('${title}')">Load</button>
+                            <button class="btn" style="padding: 3px 6px; font-size: 0.7rem;" onclick="localActionEdit('${title}')">Edit</button>
+                            <button class="btn btn-danger" style="padding: 3px 6px; font-size: 0.7rem;" onclick="localActionDelete('${title}')">Del</button>
+                        </div>
+                    `;
+                    resultsBox.appendChild(row);
+                });
+            }
+            modal.style.display = 'flex';
+        }
+
+        function localActionLoad(title) {
+            let personalSongs = JSON.parse(localStorage.getItem('bandnote_personal') || "{}");
+            if (personalSongs[title]) {
+                document.getElementById('raw-input').value = personalSongs[title].content;
+                currentSongTitle = title;
+                processText();
+                closeModal('local-list-modal');
+                switchScreen('play');
+            }
+        }
+
+        function localActionEdit(title) {
+            let personalSongs = JSON.parse(localStorage.getItem('bandnote_personal') || "{}");
+            if (personalSongs[title]) {
+                document.getElementById('raw-input').value = personalSongs[title].content;
+                currentSongTitle = title;
+                processText();
+                closeModal('local-list-modal');
+                switchScreen('edit');
+            }
+        }
+
+        function localActionDelete(title) {
+            if (confirm(`Sigurado ka bang gusto mong burahin ang "${title}" sa Local Storage?`)) {
+                let personalSongs = JSON.parse(localStorage.getItem('bandnote_personal') || "{}");
+                delete personalSongs[title];
+                localStorage.setItem('bandnote_personal', JSON.stringify(personalSongs));
+                loadPersonalListModal(); // Refresh list
+            }
+        }
+
+        /* --- MASTER CLOUD ACTIONS (Firebase) --- */
         function openMasterSaveModal() {
             const text = document.getElementById('raw-input').value.trim();
             if (!text) {
@@ -487,7 +563,6 @@
 
         async function confirmSaveMaster() {
             let passkey = document.getElementById('master-passkey-input').value.trim();
-
             if (passkey !== "paulm2026") {
                 alert("Mali ang Master Passkey! Hindi ma-save sa Master Cloud.");
                 return;
@@ -507,37 +582,6 @@
             } catch (e) {
                 alert("Error sa pag-save sa Cloud: " + e.message);
             }
-        }
-
-        function loadPersonalListModal() {
-            const modal = document.getElementById('local-list-modal');
-            const resultsBox = document.getElementById('local-results');
-            resultsBox.innerHTML = "";
-
-            let personalSongs = JSON.parse(localStorage.getItem('bandnote_personal') || "{}");
-            let keys = Object.keys(personalSongs);
-
-            if (keys.length === 0) {
-                resultsBox.innerHTML = "Wala pang naka-save na personal songs sa device na ito.";
-            } else {
-                keys.forEach(title => {
-                    let song = personalSongs[title];
-                    let item = document.createElement('div');
-                    item.style.padding = "6px 8px";
-                    item.style.borderBottom = "1px solid #262626";
-                    item.style.cursor = "pointer";
-                    item.innerHTML = `📱 <strong>${song.title}</strong>`;
-                    item.onclick = () => {
-                        document.getElementById('raw-input').value = song.content;
-                        currentSongTitle = song.title;
-                        processText();
-                        closeModal('local-list-modal');
-                        switchMode('play');
-                    };
-                    resultsBox.appendChild(item);
-                });
-            }
-            modal.style.display = 'flex';
         }
 
         function openSearchModal() {
@@ -562,19 +606,17 @@
                         let song = data[key];
                         if (song.title.toLowerCase().includes(query) || query === "") {
                             found = true;
-                            let item = document.createElement('div');
-                            item.style.padding = "6px 8px";
-                            item.style.borderBottom = "1px solid #262626";
-                            item.style.cursor = "pointer";
-                            item.innerHTML = `☁️ <strong>${song.title}</strong>`;
-                            item.onclick = () => {
-                                document.getElementById('raw-input').value = song.content;
-                                currentSongTitle = song.title;
-                                processText();
-                                closeModal('search-modal');
-                                switchMode('play');
-                            };
-                            resultsBox.appendChild(item);
+                            let row = document.createElement('div');
+                            row.className = 'song-row-item';
+                            row.innerHTML = `
+                                <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 130px;">☁️ ${song.title}</span>
+                                <div style="display: flex; gap: 4px;">
+                                    <button class="btn btn-primary" style="padding: 3px 6px; font-size: 0.7rem;" onclick="cloudActionLoad('${song.content.replace(/'/g, "\\'")}', '${song.title}')">Load</button>
+                                    <button class="btn" style="padding: 3px 6px; font-size: 0.7rem;" onclick="cloudActionEdit('${song.content.replace(/'/g, "\\'")}', '${song.title}')">Edit</button>
+                                    <button class="btn btn-danger" style="padding: 3px 6px; font-size: 0.7rem;" onclick="cloudActionDeleteOpen('${key}', '${song.title}')">Del</button>
+                                </div>
+                            `;
+                            resultsBox.appendChild(row);
                         }
                     }
                     if (!found) resultsBox.innerHTML = "Walang nakitang kanta.";
@@ -583,6 +625,46 @@
                 }
             } catch (e) {
                 resultsBox.innerHTML = "Error sa pag-load: " + e.message;
+            }
+        }
+
+        function cloudActionLoad(content, title) {
+            document.getElementById('raw-input').value = content;
+            currentSongTitle = title;
+            processText();
+            closeModal('search-modal');
+            switchScreen('play');
+        }
+
+        function cloudActionEdit(content, title) {
+            document.getElementById('raw-input').value = content;
+            currentSongTitle = title;
+            processText();
+            closeModal('search-modal');
+            switchScreen('edit');
+        }
+
+        function cloudActionDeleteOpen(key, title) {
+            songToDeleteKey = key;
+            document.getElementById('delete-song-title-label').innerText = `Burahin ang "${title}" sa Master Cloud?`;
+            document.getElementById('delete-passkey-input').value = "";
+            document.getElementById('delete-modal').style.display = 'flex';
+        }
+
+        async function confirmDeleteCloud() {
+            let passkey = document.getElementById('delete-passkey-input').value.trim();
+            if (passkey !== "paulm2026") {
+                alert("Mali ang Master Passkey! Hindi mabubura ang kanta.");
+                return;
+            }
+
+            try {
+                await window.fbRemove(window.fbRef(window.fbDB, 'songs/' + songToDeleteKey));
+                alert("Matagumpay na nabura ang kanta sa Master Cloud!");
+                closeModal('delete-modal');
+                confirmLoadCloud(); // Refresh list
+            } catch (e) {
+                alert("Error sa pagbura: " + e.message);
             }
         }
 
@@ -613,7 +695,7 @@
             }
         };
 
-        document.getElementById('raw-input').addEventListener('input', processText);
+        document.getElementById('raw-input').addEventListener('input', autoSaveDraft);
     </script>
 </body>
 </html>
