@@ -48,6 +48,7 @@
             --danger-color: #ef4444;
             --lineup-color: #8b5cf6;
             --sync-on: #10b981;
+            --highlight-color: #facc15; /* Yellow/Amber tint para sa active part */
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -182,7 +183,6 @@
 
         .screen.active { display: flex; }
 
-        /* Edit container para sa permanenteng part toolbar sa itaas ng textarea */
         .edit-container {
             display: flex;
             flex-direction: column;
@@ -251,6 +251,7 @@
         .floating-quick-bar::-webkit-scrollbar { display: none; }
 
         .chord { color: var(--chord-color) !important; font-weight: bold !important; }
+        
         .song-part {
             color: var(--section-color);
             font-weight: bold;
@@ -260,8 +261,19 @@
             font-size: 0.9rem;
             letter-spacing: 1px;
             cursor: pointer;
+            padding: 2px 6px;
+            border-radius: 4px;
+            transition: background 0.3s ease, color 0.3s ease;
         }
         .song-part:hover { color: #fff; }
+
+        /* Yellow-tinted highlight para sa active song part */
+        .song-part.active-part {
+            background-color: rgba(250, 204, 21, 0.2);
+            color: var(--highlight-color) !important;
+            border-left: 3px solid var(--highlight-color);
+            padding-left: 8px;
+        }
 
         .modal-overlay {
             position: fixed;
@@ -353,7 +365,6 @@
     </header>
 
     <div class="workspace">
-        <!-- Edit Mode na may Permanenteng Toolbar sa Itaas (Hindi natatakpan ng keyboard) -->
         <div id="screen-edit" class="screen">
             <div class="edit-container">
                 <div class="edit-toolbar">
@@ -371,7 +382,6 @@
             </div>
         </div>
 
-        <!-- Play / Live Mode na may Floating Quick-Jump Bar -->
         <div id="screen-play" class="screen active">
             <div id="output" class="output-box" onscroll="handleScrollSync()">Wala pang nilalagay na chords. I-click ang 'Songs' o 'Line Up' para pumili.</div>
             <div id="floating-quick-bar" class="floating-quick-bar">
@@ -501,7 +511,9 @@
                     }
 
                     const outputBox = document.getElementById('output');
-                    if (data.scrollTop !== undefined && Math.abs(outputBox.scrollTop - data.scrollTop) > 5) {
+                    if (data.targetPartId) {
+                        highlightAndCenterPart(data.targetPartId);
+                    } else if (data.scrollTop !== undefined && Math.abs(outputBox.scrollTop - data.scrollTop) > 5) {
                         outputBox.scrollTop = data.scrollTop;
                     }
 
@@ -562,7 +574,6 @@
             return notesSharp[newIdx] + suffix;
         }
 
-        // Nag-iinsert ng Song Part kung saan nakaposisyon ang cursor sa textarea
         function insertSongPart(partName) {
             const textarea = document.getElementById('raw-input');
             const start = textarea.selectionStart;
@@ -606,7 +617,7 @@
                     let partLabel = matchPart[1] || matchPart[0];
                     let targetId = `part-item-${partCounter}`;
                     
-                    htmlOutput += `<span id="${targetId}" class="song-part">${escapedLine}</span>\n`;
+                    htmlOutput += `<span id="${targetId}" class="song-part" onclick="jumpToSongPart('${targetId}')">${escapedLine}</span>\n`;
 
                     let qBtn = document.createElement('button');
                     qBtn.className = 'btn btn-part';
@@ -631,14 +642,21 @@
             document.getElementById('key-val').innerText = currentSemitones > 0 ? `+${currentSemitones}` : currentSemitones;
         }
 
-        function jumpToSongPart(targetId) {
+        // Function para i-highlight ng yellow at i-center sa screen ang part
+        function highlightAndCenterPart(targetId) {
+            // Alisin muna ang highlight sa lahat
+            document.querySelectorAll('.song-part').forEach(el => el.classList.remove('active-part'));
+
             const targetEl = document.getElementById(targetId);
-            const outputBox = document.getElementById('output');
             if (targetEl) {
-                const topPos = targetEl.offsetTop - outputBox.offsetTop - 20;
-                outputBox.scrollTo({ top: topPos, behavior: 'smooth' });
-                broadcastLiveState();
+                targetEl.classList.add('active-part');
+                targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
             }
+        }
+
+        function jumpToSongPart(targetId) {
+            highlightAndCenterPart(targetId);
+            broadcastLiveState({ targetPartId: targetId });
         }
 
         function transpose(amount) {
@@ -845,7 +863,7 @@
                                 <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100px;">🎵 ${song.title}</span>
                                 <div style="display: flex; gap: 3px;">
                                     <button class="btn btn-primary" style="padding: 3px 5px; font-size: 0.65rem;" onclick="cloudActionLoad('${key}')">Load</button>
-                                    <button class="btn" style="padding: 3px 5px; font-size: 0.65rem;" onclick="cloudActionEdit('${key}')";>Edit</button>
+                                    <button class="btn" style="padding: 3px 5px; font-size: 0.65rem;" onclick="cloudActionEdit('${key}')">Edit</button>
                                     <button class="btn btn-lineup" style="padding: 3px 5px; font-size: 0.65rem;" onclick="cloudActionAssign('${key}')">Assign</button>
                                     <button class="btn btn-danger" style="padding: 3px 5px; font-size: 0.65rem;" onclick="cloudActionDeleteOpen('${key}', '${song.title.replace(/'/g, "\\'")}')">Del</button>
                                 </div>
