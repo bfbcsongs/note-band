@@ -254,7 +254,7 @@
 
     <header>
         <div class="header-row-1">
-            <h1>Band Note</h1>
+            <h1 id="app-title-display">Band Note (Untitled)</h1>
             <div class="header-controls">
                 <div class="trans-badge">
                     <span>Key:<strong id="key-val">0</strong></span>
@@ -267,21 +267,21 @@
         </div>
 
         <div class="header-row-2">
-            <button class="btn" onclick="openQRModal()">QR Share</button>
+            <button class="btn" onclick="newSong()">New Song</button>
             <button class="btn btn-primary" onclick="openMasterSaveModal()">Master Save</button>
-            <button class="btn btn-personal" onclick="openPersonalSaveModal()">Personal Save</button>
             <button class="btn" onclick="openSearchModal()">Load Cloud</button>
-            <button class="btn" onclick="loadPersonalListModal()">Local Songs</button>
+            <button class="btn btn-personal" onclick="loadPersonalListModal()">Local Songs</button>
+            <button class="btn" onclick="openQRModal()">QR Share</button>
         </div>
     </header>
 
     <div class="workspace">
         <div id="screen-edit" class="screen">
-            <textarea id="raw-input" placeholder="I-paste ang lyrics at chords dito (kasama ang Intro, Verse, Chorus, etc.)..." oninput="autoSavePersonal()"></textarea>
+            <textarea id="raw-input" placeholder="I-paste ang lyrics at chords dito..." oninput="autoSavePersonal()"></textarea>
         </div>
 
         <div id="screen-play" class="screen active">
-            <div id="output" class="output-box">Wala pang nilalagay na kanta. I-click ang 'Edit' para maglagay o i-load mula sa Cloud.</div>
+            <div id="output" class="output-box">Wala pang nilalagay na kanta. I-click ang 'Edit' para maglagay o i-load mula sa Cloud/Local.</div>
         </div>
     </div>
 
@@ -295,27 +295,15 @@
         </div>
     </div>
 
-    <!-- Master Cloud Save Modal (Protected by Passkey) -->
+    <!-- Master Cloud Save Modal (Passkey Only, No Title Input Needed) -->
     <div id="save-modal" class="modal-overlay" onclick="closeModal('save-modal')">
         <div class="modal-content" onclick="event.stopPropagation()">
             <h3 style="font-size: 1rem; color: #fff;">Save to Master Cloud</h3>
-            <input type="text" id="song-title-input" placeholder="Ilagay ang Pamagat ng Kanta...">
+            <p id="master-song-title-label" style="font-size: 0.85rem; color: var(--section-color); font-weight: bold;"></p>
             <input type="password" id="master-passkey-input" placeholder="Ilagay ang Master Passkey...">
             <div style="display: flex; gap: 8px; width: 100%;">
                 <button class="btn" style="flex:1;" onclick="closeModal('save-modal')">Cancel</button>
                 <button class="btn btn-primary" style="flex:1;" onclick="confirmSaveMaster()">Save Master</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Personal Local Save Modal -->
-    <div id="personal-save-modal" class="modal-overlay" onclick="closeModal('personal-save-modal')">
-        <div class="modal-content" onclick="event.stopPropagation()">
-            <h3 style="font-size: 1rem; color: #fff;">Save to Personal Storage</h3>
-            <input type="text" id="personal-title-input" placeholder="Pamagat para sa Personal Edit...">
-            <div style="display: flex; gap: 8px; width: 100%;">
-                <button class="btn" style="flex:1;" onclick="closeModal('personal-save-modal')">Cancel</button>
-                <button class="btn btn-personal" style="flex:1;" onclick="confirmSavePersonal()">Save Local</button>
             </div>
         </div>
     </div>
@@ -346,6 +334,7 @@
         const notesSharp = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
         const notesFlat = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
         let currentSemitones = 0;
+        let currentSongTitle = "Untitled";
 
         function getNoteIndex(note) {
             let idx = notesSharp.indexOf(note);
@@ -367,12 +356,32 @@
             return notesSharp[newIdx] + suffix;
         }
 
+        function extractTitle(text) {
+            let lines = text.split('\n');
+            for (let line of lines) {
+                let clean = line.trim();
+                // Kung may nakitang quoted title o unang linya na may laman
+                if (clean.startsWith('"') && clean.endsWith('"')) {
+                    return clean.replace(/"/g, '');
+                }
+                if (clean && !clean.toLowerCase().startsWith('by') && !clean.includes(':')) {
+                    return clean;
+                }
+            }
+            return "Untitled Song";
+        }
+
         function processText() {
             const text = document.getElementById('raw-input').value;
             if (!text.trim()) {
                 document.getElementById('output').innerText = "Wala pang nilalagay na chords. I-click ang 'Edit' para maglagay.";
+                document.getElementById('app-title-display').innerText = "Band Note (Untitled)";
                 return;
             }
+
+            // Automatic title detection mula sa unang linya ng lyrics
+            currentSongTitle = extractTitle(text);
+            document.getElementById('app-title-display').innerText = "Band Note - " + currentSongTitle;
 
             const lines = text.split('\n');
             let htmlOutput = '';
@@ -425,37 +434,60 @@
             }
         }
 
-        /* --- MASTER CLOUD ACTIONS (Firebase) --- */
+        function newSong() {
+            if (confirm("Gusto mo bang gumawa ng bagong kanta? Masasara ang kasalukuyang draft.")) {
+                document.getElementById('raw-input').value = "";
+                currentSongTitle = "Untitled";
+                document.getElementById('app-title-display').innerText = "Band Note (Untitled)";
+                document.getElementById('output').innerText = "Wala pang nilalagay na kanta.";
+                switchMode('edit');
+            }
+        }
+
+        /* --- AUTOMATIC PERSONAL LOCAL STORAGE SAVE --- */
+        function autoSavePersonal() {
+            const text = document.getElementById('raw-input').value;
+            if (text.trim()) {
+                currentSongTitle = extractTitle(text);
+                document.getElementById('app-title-display').innerText = "Band Note - " + currentSongTitle;
+                
+                let personalSongs = JSON.parse(localStorage.getItem('bandnote_personal') || "{}");
+                personalSongs[currentSongTitle] = {
+                    title: currentSongTitle,
+                    content: text,
+                    updatedAt: new Date().toISOString()
+                };
+                localStorage.setItem('bandnote_personal', JSON.stringify(personalSongs));
+            }
+        }
+
+        /* --- MASTER CLOUD ACTIONS (Firebase with Passkey Only) --- */
         function openMasterSaveModal() {
             const text = document.getElementById('raw-input').value.trim();
             if (!text) {
                 alert("Walang laman ang lyrics/chords para ma-save sa Master Cloud!");
                 return;
             }
-            document.getElementById('song-title-input').value = "";
+            currentSongTitle = extractTitle(text);
+            document.getElementById('master-song-title-label').innerText = "Kanta: " + currentSongTitle;
             document.getElementById('master-passkey-input').value = "";
             document.getElementById('save-modal').style.display = 'flex';
         }
 
         async function confirmSaveMaster() {
-            let title = document.getElementById('song-title-input').value.trim();
             let passkey = document.getElementById('master-passkey-input').value.trim();
 
-            if (!title) {
-                alert("Maglagay ng pangalan ng kanta!");
-                return;
-            }
             if (passkey !== "paulm2026") {
                 alert("Mali ang Master Passkey! Hindi ma-save sa Master Cloud.");
                 return;
             }
 
             const text = document.getElementById('raw-input').value;
-            let safeKey = title.replace(/[\.#$\/\[\]]/g, "_");
+            let safeKey = currentSongTitle.replace(/[\.#$\/\[\]]/g, "_");
 
             try {
                 await window.fbSet(window.fbRef(window.fbDB, 'songs/' + safeKey), {
-                    title: title,
+                    title: currentSongTitle,
                     content: text,
                     updatedAt: new Date().toISOString()
                 });
@@ -463,45 +495,6 @@
                 closeModal('save-modal');
             } catch (e) {
                 alert("Error sa pag-save sa Cloud: " + e.message);
-            }
-        }
-
-        /* --- PERSONAL LOCAL STORAGE ACTIONS --- */
-        function openPersonalSaveModal() {
-            const text = document.getElementById('raw-input').value.trim();
-            if (!text) {
-                alert("Walang laman para ma-save sa local storage!");
-                return;
-            }
-            document.getElementById('personal-title-input').value = "";
-            document.getElementById('personal-save-modal').style.display = 'flex';
-        }
-
-        function confirmSavePersonal() {
-            let title = document.getElementById('personal-title-input').value.trim();
-            if (!title) {
-                alert("Maglagay ng pamagat para sa personal save!");
-                return;
-            }
-            const text = document.getElementById('raw-input').value;
-            let personalSongs = JSON.parse(localStorage.getItem('bandnote_personal') || "{}");
-            
-            personalSongs[title] = {
-                title: title,
-                content: text,
-                updatedAt: new Date().toISOString()
-            };
-
-            localStorage.setItem('bandnote_personal', JSON.stringify(personalSongs));
-            alert("Matagumpay na na-save sa iyong Local Storage!");
-            closeModal('personal-save-modal');
-        }
-
-        // Automatic silent background save to local storage as user types
-        function autoSavePersonal() {
-            const text = document.getElementById('raw-input').value;
-            if (text.trim()) {
-                localStorage.setItem('bandnote_draft', text);
             }
         }
 
@@ -525,6 +518,7 @@
                     item.innerHTML = `📱 <strong>${song.title}</strong>`;
                     item.onclick = () => {
                         document.getElementById('raw-input').value = song.content;
+                        currentSongTitle = song.title;
                         processText();
                         closeModal('local-list-modal');
                         switchMode('play');
@@ -564,6 +558,7 @@
                             item.innerHTML = `☁️ <strong>${song.title}</strong>`;
                             item.onclick = () => {
                                 document.getElementById('raw-input').value = song.content;
+                                currentSongTitle = song.title;
                                 processText();
                                 closeModal('search-modal');
                                 switchMode('play');
@@ -599,11 +594,16 @@
             document.getElementById(modalId).style.display = 'none';
         }
 
-        // Restore draft on load if available
+        // Auto-load last edited local draft on startup
         window.onload = function() {
-            let draft = localStorage.getItem('bandnote_draft');
-            if (draft && !document.getElementById('raw-input').value) {
-                document.getElementById('raw-input').value = draft;
+            let personalSongs = JSON.parse(localStorage.getItem('bandnote_personal') || "{}");
+            let keys = Object.keys(personalSongs);
+            if (keys.length > 0) {
+                // Kunin ang huling kinonfigure o inedit
+                let lastSong = personalSongs[keys[keys.length - 1]];
+                document.getElementById('raw-input').value = lastSong.content;
+                currentSongTitle = lastSong.title;
+                processText();
             }
         };
 
